@@ -1,0 +1,25 @@
+### Java / Maven ###
+target/
+*.class
+*.jar
+*.war
+
+### IDE ###
+.idea/
+*.iml
+.vscode/
+
+### Node / Frontend ###
+node_modules/
+dist/
+build/
+*.log
+
+### Env / Secrets ###
+.env
+.env.*
+!.env.example
+
+### OS ###
+.DS_Store
+Thumbs.db

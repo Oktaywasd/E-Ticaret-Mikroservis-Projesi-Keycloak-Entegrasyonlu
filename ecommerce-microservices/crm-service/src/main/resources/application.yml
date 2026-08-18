@@ -1,0 +1,49 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: crm-service
+
+  # --- PostgreSQL Yapılandırması ---
+  datasource:
+    url: jdbc:postgresql://localhost:5433/crm_db
+    username: keycloak
+    password: keycloak_password
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # --- Keycloak JWT OAuth2 Resource Server ---
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8080/realms/ecommerce-realm
+          jwk-set-uri: http://localhost:8080/realms/ecommerce-realm/protocol/openid-connect/certs
+
+# --- Keycloak Admin REST API Konfigürasyonu ---
+keycloak:
+  realm: ecommerce-realm
+  auth-server-url: http://localhost:8080
+  admin:
+    realm: master
+    username: admin        # <-- Keycloak Web paneline girerken kullandığın kullanıcı adı
+    password: admin        # <-- Keycloak Web paneline girerken kullandığın şifre
+    client-id: admin-cli
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    org.springframework.security: DEBUG

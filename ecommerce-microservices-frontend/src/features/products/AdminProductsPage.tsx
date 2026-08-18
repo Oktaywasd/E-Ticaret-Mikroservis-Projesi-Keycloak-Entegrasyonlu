@@ -1,0 +1,281 @@
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+  Plus, Search, Edit2, Trash2, Package, Archive, BarChart2,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ErrorMessage } from '@/components/ui/error-message';
+import { Pagination } from '@/components/ui/pagination';
+import { DeleteConfirmModal } from '@/components/ui/delete-confirm-modal';
+import { StockUpdateModal } from './StockUpdateModal';
+import { useProducts, useDeleteProduct } from './useProductQueries';
+import type { Product } from './types';
+
+const PAGE_SIZE = 10;
+
+export function AdminProductsPage() {
+  const navigate = useNavigate();
+  const [page, setPage] = useState(0);
+  const [search, setSearch] = useState('');
+  const [draftSearch, setDraftSearch] = useState('');
+  const [includeDeleted, setIncludeDeleted] = useState(false);
+
+  const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
+  const [stockTarget, setStockTarget] = useState<Product | null>(null);
+
+  const { data, isLoading, isError, error, refetch } = useProducts({
+    page,
+    size: PAGE_SIZE,
+    name: search || undefined,
+    includeDeleted,
+  });
+
+  const { mutate: deleteProduct, isPending: deleting } = useDeleteProduct();
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearch(draftSearch);
+    setPage(0);
+  };
+
+  const handleDelete = () => {
+    if (!deleteTarget) return;
+    deleteProduct(deleteTarget.id, {
+      onSuccess: () => setDeleteTarget(null),
+    });
+  };
+
+  const formatPrice = (price: any) => {
+    if (price === null || price === undefined) return "₺0,00";
+    if (typeof price === 'object') {
+      const val = price.sellingPrice ?? price.amount ?? price.originalPrice ?? 0;
+      return `₺${Number(val).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`;
+    }
+    return `₺${Number(price).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}`;
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold">Ürün Yönetimi</h1>
+          {data && (
+            <p className="text-sm text-muted-foreground">{data.totalElements} ürün</p>
+          )}
+        </div>
+        <Button
+          id="add-product-button"
+          className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
+          onClick={() => navigate('/admin/products/new')}
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Yeni Ürün
+        </Button>
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <form onSubmit={handleSearch} className="flex gap-2 flex-1">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              id="admin-products-search"
+              placeholder="Ürün adı ara…"
+              value={draftSearch}
+              onChange={(e) => setDraftSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <Button type="submit" variant="outline" size="sm">Ara</Button>
+        </form>
+
+        <Button
+          variant={includeDeleted ? 'secondary' : 'outline'}
+          size="sm"
+          onClick={() => { setIncludeDeleted((v) => !v); setPage(0); }}
+        >
+          <Archive className="h-4 w-4 mr-2" />
+          {includeDeleted ? 'Silinenler Dahil' : 'Aktif Ürünler'}
+        </Button>
+      </div>
+
+      {/* Table */}
+      {isError ? (
+        <ErrorMessage error={error} onRetry={refetch} />
+      ) : (
+        <div className="rounded-xl border border-border/50 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="border-b border-border/50 bg-muted/30">
+              <tr>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Ürün</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden sm:table-cell">Kategori</th>
+                <th className="px-4 py-3 text-right font-medium text-muted-foreground">Fiyat</th>
+                <th className="px-4 py-3 text-right font-medium text-muted-foreground">Stok</th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden md:table-cell">Durum</th>
+                <th className="px-4 py-3 text-right font-medium text-muted-foreground">İşlem</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading
+                ? Array.from({ length: PAGE_SIZE }).map((_, i) => (
+                    <tr key={i} className="border-b border-border/30">
+                      <td className="px-4 py-3"><Skeleton className="h-9 w-full" /></td>
+                      <td className="px-4 py-3 hidden sm:table-cell"><Skeleton className="h-4 w-20" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-4 w-16 ml-auto" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-4 w-10 ml-auto" /></td>
+                      <td className="px-4 py-3 hidden md:table-cell"><Skeleton className="h-5 w-14" /></td>
+                      <td className="px-4 py-3"><Skeleton className="h-8 w-20 ml-auto" /></td>
+                    </tr>
+                  ))
+                : !data?.content.length
+                ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                        <div className="flex flex-col items-center gap-3">
+                          <Package className="h-8 w-8 text-muted-foreground/40" />
+                          <p>Ürün bulunamadı</p>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                : data.content.map((product) => (
+                    <tr
+                      key={product.id}
+                      className={`border-b border-border/30 hover:bg-muted/20 transition-colors ${
+                        product.deleted ? 'opacity-50' : ''
+                      }`}
+                    >
+                      {/* Product */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="h-9 w-9 rounded-lg bg-muted overflow-hidden shrink-0">
+                            {product.imageUrl ? (
+                              <img src={product.imageUrl} alt="" className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center">
+                                <Package className="h-4 w-4 text-muted-foreground/40" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium truncate max-w-[140px] sm:max-w-[200px]">
+                              {product.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground font-mono">{product.productCode}</p>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Category */}
+                      <td className="px-4 py-3 hidden sm:table-cell">
+                        <span className="text-muted-foreground">{product.category?.name}</span>
+                      </td>
+
+                      {/* Price */}
+                      <td className="px-4 py-3 text-right font-semibold">
+                        {formatPrice(product.price)}
+                      </td>
+
+                      {/* Stock */}
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          className="font-semibold hover:text-violet-400 transition-colors"
+                          onClick={() => setStockTarget(product)}
+                          title="Stok güncelle"
+                          aria-label={`${product.name} stok güncelle`}
+                        >
+                          <span className={
+                            product.stock.currentStock === 0
+                              ? 'text-destructive'
+                              : product.stock.currentStock <= 5
+                              ? 'text-amber-400'
+                              : ''
+                          }>
+                            {product.stock.currentStock}
+                          </span>
+                        </button>
+                      </td>
+
+                      {/* Status */}
+                      <td className="px-4 py-3 hidden md:table-cell">
+                        {product.deleted ? (
+                          <Badge variant="destructive">Silindi</Badge>
+                        ) : product.active ? (
+                          <Badge variant="success">Aktif</Badge>
+                        ) : (
+                          <Badge variant="warning">Pasif</Badge>
+                        )}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            asChild
+                            aria-label="Düzenle"
+                          >
+                            <Link to={`/admin/products/${product.id}/edit`}>
+                              <Edit2 className="h-3.5 w-3.5" />
+                            </Link>
+                          </Button>
+                          {!product.deleted && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => setDeleteTarget(product)}
+                              aria-label="Sil"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+              }
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {data && data.totalPages > 1 && (
+        <Pagination
+          currentPage={data.number}
+          totalPages={data.totalPages}
+          totalElements={data.totalElements}
+          pageSize={data.size}
+          onPageChange={setPage}
+        />
+      )}
+
+      {/* Modals */}
+      <DeleteConfirmModal
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Ürünü Sil"
+        description={`"${deleteTarget?.name}" ürünü silinecek. Bu işlem geri alınamaz.`}
+        onConfirm={handleDelete}
+        isLoading={deleting}
+      />
+
+      {stockTarget && (
+        <StockUpdateModal
+          open={!!stockTarget}
+          onOpenChange={(open) => !open && setStockTarget(null)}
+          productId={stockTarget.id}
+          productName={stockTarget.name}
+          currentStock={stockTarget.stock.currentStock}
+        />
+      )}
+    </div>
+  );
+}
