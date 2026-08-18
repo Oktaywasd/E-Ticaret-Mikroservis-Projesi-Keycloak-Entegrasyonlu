@@ -1,0 +1,19 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: discovery-media-service
+  servlet:
+    multipart:
+      max-file-size: 50MB       # Kısa videolar için üst limit
+      max-request-size: 55MB
+
+minio:
+  endpoint: http://localhost:9000
+  access-key: minioadmin
+  secret-key: minioadminpassword
+  region: us-east-1             # MinIO için varsayılan
+  buckets:
+    videos: reels-videos
+    thumbnails: reels-thumbnails

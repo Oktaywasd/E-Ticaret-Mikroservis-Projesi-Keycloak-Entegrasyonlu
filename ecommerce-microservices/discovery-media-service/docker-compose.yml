@@ -1,0 +1,17 @@
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: ecommerce-minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"   # S3 API Portu (Spring Boot buraya bağlanacak)
+      - "9001:9001"   # Web Console Portu (Tarayıcıdan erişim için)
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadminpassword
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+
+volumes:
+  minio_data:
