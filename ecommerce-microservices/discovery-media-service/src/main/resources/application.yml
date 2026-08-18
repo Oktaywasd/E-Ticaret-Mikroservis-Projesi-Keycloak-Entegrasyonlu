@@ -1,6 +1,5 @@
 server:
   port: 8084
-
 spring:
   application:
     name: discovery-media-service
@@ -8,7 +7,13 @@ spring:
     multipart:
       max-file-size: 50MB       # Kısa videolar için üst limit
       max-request-size: 55MB
-
+  spring:
+    security:
+      oauth2:
+        resourceserver:
+          jwt:
+            issuer-uri: http://localhost:8080/realms/ecommerce-realm
+            jwk-set-uri: http://localhost:8080/realms/ecommerce-realm/protocol/openid-connect/certs
 minio:
   endpoint: http://localhost:9000
   access-key: minioadmin
@@ -17,3 +22,9 @@ minio:
   buckets:
     videos: reels-videos
     thumbnails: reels-thumbnails
+application:
+  clients:
+    product-catalog:
+      url: http://localhost:8081
+    order:
+      url: http://localhost:8083
