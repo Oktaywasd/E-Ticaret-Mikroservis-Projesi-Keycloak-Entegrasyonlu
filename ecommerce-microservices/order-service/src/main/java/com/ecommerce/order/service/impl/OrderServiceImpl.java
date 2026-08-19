@@ -147,6 +147,15 @@ public class OrderServiceImpl implements OrderService {
 
         return orderMapper.toOrderResponseDto(cancelledOrder);
     }
+//mavi tik için eklendi
+    @Override
+    public Boolean verifyUserPurchasedProduct(String userId, String productId) {
+        return orderRepository.existsByKeycloakUserIdAndStatusInAndItems_ProductId(
+                userId,
+                List.of(OrderStatus.DELIVERED, OrderStatus.PAID),
+                productId
+        );
+    }
 
     private Order findOrderEntityById(String orderId) {
         return orderRepository.findById(orderId)

@@ -19,4 +19,6 @@ public interface OrderService {
     OrderResponseDto updateOrderStatus(String orderId, OrderStatus newStatus);
 
     OrderResponseDto cancelOrder(String orderId, String keycloakUserId, boolean isAdmin);
+
+    Boolean verifyUserPurchasedProduct(String userId, String productId);
 }

@@ -56,6 +56,14 @@ public class OrderController {
         return ResponseEntity.ok(orderService.getOrderById(id, keycloakUserId, isAdmin));
     }
 
+    @GetMapping("/internal/verify-purchase")
+    @Operation(summary = "Verify if user purchased the product (Internal Inter-Service Call)")
+    public ResponseEntity<Boolean> verifyPurchase(
+            @RequestParam("userId") String userId,
+            @RequestParam("productId") String productId) {
+        return ResponseEntity.ok(orderService.verifyUserPurchasedProduct(userId, productId));
+    }
+
     @GetMapping
     @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     @Operation(summary = "Get all orders (Admin only)")
