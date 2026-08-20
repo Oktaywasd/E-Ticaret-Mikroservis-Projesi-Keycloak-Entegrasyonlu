@@ -8,6 +8,7 @@ import {
   BarChart2,
   Settings,
   ChevronRight,
+  Film,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppAuth } from '@/hooks/useAppAuth';
@@ -63,6 +64,14 @@ export function AdminSidebar() {
 
       <SidebarLink to="/admin/products" icon={<Package />} label="Ürünler" />
       <SidebarLink to="/admin/categories" icon={<Tag />} label="Kategoriler" />
+
+      <div className="px-3 pt-4 pb-1">
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">
+          Medya & Pazarlama
+        </p>
+      </div>
+      
+      <SidebarLink to="/admin/reels" icon={<Film />} label="Reels Yönetimi" />
 
       <div className="px-3 pt-4 pb-1">
         <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">

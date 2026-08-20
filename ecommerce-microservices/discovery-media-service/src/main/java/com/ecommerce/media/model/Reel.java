@@ -8,6 +8,8 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.Set;
 
 @Data
 @Builder
@@ -33,6 +35,9 @@ public class Reel {
 
     @Builder.Default
     private Long viewCount = 0L;
+
+    @Builder.Default
+    private Set<String> likedUserIds = new HashSet<>();
 
     @Builder.Default
     private String status = "ACTIVE";

@@ -12,5 +12,6 @@ import java.util.List;
 public interface ReelCommentRepository extends MongoRepository<ReelComment, String> {
     List<ReelComment> findAllByReelIdOrderByIsPinnedDescCreatedAtDesc(String reelId);
     Page<ReelComment> findAllByReelIdOrderByIsPinnedDescCreatedAtDesc(String reelId, Pageable pageable);
+    long countByReelId(String reelId);
     void deleteAllByReelId(String reelId);
 }

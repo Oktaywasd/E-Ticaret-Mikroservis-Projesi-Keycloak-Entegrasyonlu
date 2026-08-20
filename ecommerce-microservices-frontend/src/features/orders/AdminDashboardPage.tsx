@@ -1,5 +1,5 @@
 import { useAppAuth } from '@/hooks/useAppAuth';
-import { LayoutDashboard, Package, ShoppingBag, Users } from 'lucide-react';
+import { LayoutDashboard, Package, ShoppingBag, Users, Film } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export function AdminDashboardPage() {
@@ -8,6 +8,7 @@ export function AdminDashboardPage() {
   const cards = [
     { title: 'Ürünler', icon: <Package className="h-5 w-5" />, to: '/admin/products', color: 'violet' },
     { title: 'Siparişler', icon: <ShoppingBag className="h-5 w-5" />, to: '/admin/orders', color: 'indigo' },
+    { title: 'Reels Videoları', icon: <Film className="h-5 w-5" />, to: '/admin/reels', color: 'rose' },
     ...(auth.isAdmin
       ? [{ title: 'Kullanıcılar', icon: <Users className="h-5 w-5" />, to: '/admin/users', color: 'emerald' }]
       : []),

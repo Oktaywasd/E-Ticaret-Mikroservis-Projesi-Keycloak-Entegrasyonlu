@@ -48,13 +48,22 @@ public class ReelController {
     @SecurityRequirement(name = "bearerAuth")
     @Operation(summary = "Upload a new reel video (Seller & Admin)")
     public ResponseEntity<ReelResponse> uploadReel(
-            @Valid @ModelAttribute CreateReelRequest request,
-            @RequestPart("video") MultipartFile video,
-            @RequestPart(value = "thumbnail", required = false) MultipartFile thumbnail,
+            @RequestParam("title") String title,
+            @RequestParam("description") String description,
+            @RequestParam("productId") String productId,
+            @RequestParam(value = "durationInSeconds", required = false, defaultValue = "30") Integer durationInSeconds,
+            @RequestParam("videoFile") MultipartFile videoFile,
+            @RequestParam(value = "thumbnailFile", required = false) MultipartFile thumbnailFile,
             @AuthenticationPrincipal Jwt jwt) {
 
-        String sellerId = jwt.getSubject();
-        ReelResponse response = reelService.uploadReel(request, video, thumbnail, sellerId);
+        CreateReelRequest request = new CreateReelRequest();
+        request.setTitle(title);
+        request.setDescription(description);
+        request.setProductId(productId);
+        request.setDurationInSeconds(durationInSeconds != null ? durationInSeconds : 30);
+
+        String sellerId = (jwt != null) ? jwt.getSubject() : "anonymous-seller";
+        ReelResponse response = reelService.uploadReel(request, videoFile, thumbnailFile, sellerId);
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
@@ -69,7 +78,8 @@ public class ReelController {
     @SecurityRequirement(name = "bearerAuth")
     @Operation(summary = "Like a reel video (Customer)")
     public ResponseEntity<Void> likeReel(@PathVariable String id, @AuthenticationPrincipal Jwt jwt) {
-        reelService.toggleLikeReel(id, jwt.getSubject());
+        String userId = (jwt != null) ? jwt.getSubject() : "anonymous-user";
+        reelService.toggleLikeReel(id, userId);
         return ResponseEntity.ok().build();
     }
 
@@ -87,8 +97,8 @@ public class ReelController {
             @Valid @RequestBody CreateCommentRequest request,
             @AuthenticationPrincipal Jwt jwt) {
 
-        String userId = jwt.getSubject();
-        String username = jwt.getClaimAsString("preferred_username");
+        String userId = (jwt != null) ? jwt.getSubject() : "anonymous-user";
+        String username = (jwt != null) ? jwt.getClaimAsString("preferred_username") : "Anonymous";
         return new ResponseEntity<>(reelService.addComment(reelId, request, userId, username), HttpStatus.CREATED);
     }
 
@@ -96,7 +106,8 @@ public class ReelController {
     @SecurityRequirement(name = "bearerAuth")
     @Operation(summary = "Pin/Unpin comment to top (Seller & Admin)")
     public ResponseEntity<Void> pinComment(@PathVariable String id, @AuthenticationPrincipal Jwt jwt) {
-        reelService.pinComment(id, jwt.getSubject(), hasAdminRole(jwt));
+        String userId = (jwt != null) ? jwt.getSubject() : "anonymous-user";
+        reelService.pinComment(id, userId, hasAdminRole(jwt));
         return ResponseEntity.ok().build();
     }
 
@@ -104,12 +115,16 @@ public class ReelController {
     @SecurityRequirement(name = "bearerAuth")
     @Operation(summary = "Delete reel (Seller & Admin)")
     public ResponseEntity<Void> deleteReel(@PathVariable String id, @AuthenticationPrincipal Jwt jwt) {
-        reelService.deleteReel(id, jwt.getSubject(), hasAdminRole(jwt));
+        String userId = (jwt != null) ? jwt.getSubject() : "anonymous-user";
+        reelService.deleteReel(id, userId, hasAdminRole(jwt));
         return ResponseEntity.noContent().build();
     }
 
     @SuppressWarnings("unchecked")
     private boolean hasAdminRole(Jwt jwt) {
+        if (jwt == null) {
+            return false;
+        }
         var realmAccess = jwt.getClaimAsMap("realm_access");
         if (realmAccess != null && realmAccess.containsKey("roles")) {
             List<String> roles = (List<String>) realmAccess.get("roles");

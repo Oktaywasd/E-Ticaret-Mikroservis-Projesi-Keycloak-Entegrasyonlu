@@ -1,13 +1,17 @@
 package com.ecommerce.media.service;
 
 import com.ecommerce.media.config.S3Config;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 
 import java.io.IOException;
 import java.util.UUID;
@@ -20,6 +24,27 @@ public class FileStorageService {
     private final S3Client s3Client;
     private final S3Config s3Config;
 
+    @PostConstruct
+    public void init() {
+        createBucketIfNotExists(s3Config.getVideosBucket());
+        createBucketIfNotExists(s3Config.getThumbnailsBucket());
+    }
+
+    private void createBucketIfNotExists(String bucketName) {
+        if (bucketName == null || bucketName.isBlank()) return;
+        try {
+            s3Client.headBucket(HeadBucketRequest.builder().bucket(bucketName).build());
+        } catch (S3Exception e) {
+            try {
+                log.info("MinIO bucket oluşturuluyor: {}", bucketName);
+                s3Client.createBucket(CreateBucketRequest.builder().bucket(bucketName).build());
+                log.info("MinIO bucket başarıyla oluşturuldu: {}", bucketName);
+            } catch (Exception ex) {
+                log.error("Bucket oluşturulamadı: {}", bucketName, ex);
+            }
+        }
+    }
+
     public String uploadVideo(MultipartFile file) {
         return uploadFile(file, s3Config.getVideosBucket());
     }
@@ -29,7 +54,7 @@ public class FileStorageService {
     }
 
     private String uploadFile(MultipartFile file, String bucketName) {
-        if (file.isEmpty()) {
+        if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("Yüklenecek dosya boş olamaz.");
         }
 

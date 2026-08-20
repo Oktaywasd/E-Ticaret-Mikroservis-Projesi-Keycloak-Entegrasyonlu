@@ -50,13 +50,24 @@ export function HomePage() {
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Link>
             </Button>
+            
+            <Button
+              size="lg"
+              className="bg-gradient-to-r from-rose-500 to-orange-500 hover:from-rose-600 hover:to-orange-600 text-white shadow-lg shadow-rose-500/30"
+              asChild
+            >
+              <Link to="/reels">
+                🎬 Trend Reels İzle
+              </Link>
+            </Button>
+
             <Button 
               size="lg" 
               variant="outline" 
               className="border-white/20 text-white hover:bg-white/10" 
               onClick={() => document.getElementById('categories')?.scrollIntoView({ behavior: 'smooth' })}
             >
-              Kategorileri İncele
+              Kategoriler
             </Button>
           </div>
         </div>

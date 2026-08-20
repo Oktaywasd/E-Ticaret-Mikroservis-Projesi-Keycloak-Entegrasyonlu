@@ -50,6 +50,14 @@ export function Header() {
           <Button variant="ghost" size="sm" asChild>
             <Link to="/products">Ürünler</Link>
           </Button>
+          <Button variant="ghost" size="sm" asChild className="group relative">
+            <Link to="/reels">
+              Reels
+              <span className="ml-1.5 inline-flex items-center rounded-md bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-500 ring-1 ring-inset ring-rose-500/20 group-hover:bg-rose-500/20">
+                Yeni
+              </span>
+            </Link>
+          </Button>
           {auth.isAdminOrSeller && (
             <Button variant="ghost" size="sm" asChild>
               <Link to="/admin/orders">Panel</Link>
@@ -176,6 +184,11 @@ export function Header() {
             <Button variant="ghost" className="justify-start" asChild>
               <Link to="/products" onClick={() => setMobileMenuOpen(false)}>
                 Ürünler
+              </Link>
+            </Button>
+            <Button variant="ghost" className="justify-start text-rose-500 hover:text-rose-600 hover:bg-rose-500/10" asChild>
+              <Link to="/reels" onClick={() => setMobileMenuOpen(false)}>
+                Reels <Badge variant="secondary" className="ml-2 bg-rose-500/20 text-rose-600 hover:bg-rose-500/30">Yeni</Badge>
               </Link>
             </Button>
             {auth.isAdminOrSeller && (

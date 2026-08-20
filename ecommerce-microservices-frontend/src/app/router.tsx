@@ -14,6 +14,7 @@ import { ProductsPage } from '@/features/products/ProductsPage';
 import { ProductDetailPage } from '@/features/products/ProductDetailPage';
 import { CategoriesPage } from '@/features/products/CategoriesPage';
 import { CartPage } from '@/features/cart/CartPage';
+import ReelsFeedPage from '@/pages/ReelsFeedPage';
 
 // Pages — Auth
 import { CallbackPage } from '@/features/auth/CallbackPage';
@@ -33,6 +34,7 @@ import { ProductFormPage } from '@/features/products/ProductFormPage';
 import { AdminCategoriesPage } from '@/features/products/AdminCategoriesPage';
 import { AdminUsersPage } from '@/features/crm/AdminUsersPage';
 import { AdminOrdersPage } from '@/features/orders/AdminOrdersPage';
+import AdminReelsPage from '@/pages/admin/AdminReelsPage';
 
 function PlaceholderPage({ title }: { title: string }) {
   return (
@@ -56,6 +58,7 @@ export function AppRouter() {
         <Route path="/products" element={<ProductsPage />} />
         <Route path="/products/:id" element={<ProductDetailPage />} />
         <Route path="/cart" element={<CartPage />} />
+        <Route path="/reels" element={<ReelsFeedPage />} />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
@@ -94,6 +97,9 @@ export function AppRouter() {
 
         {/* FAZ 3 — Admin Orders */}
         <Route path="/admin/orders" element={<AdminOrdersPage />} />
+
+        {/* Medya & Pazarlama */}
+        <Route path="/admin/reels" element={<AdminReelsPage />} />
 
         {/* FAZ 2 — Admin-only */}
         <Route

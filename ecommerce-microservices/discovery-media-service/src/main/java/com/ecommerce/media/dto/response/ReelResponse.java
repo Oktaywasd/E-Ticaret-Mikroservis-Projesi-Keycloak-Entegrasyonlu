@@ -23,4 +23,6 @@ public class ReelResponse {
 
     // Feign ile Catalog servisinden doldurulacak ürün özeti
     private ProductSummaryResponse product;
+
+    private Long commentCount;
 }

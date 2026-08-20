@@ -26,6 +26,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.HashSet;
 import java.util.List;
 
 @Slf4j
@@ -56,7 +57,7 @@ public class ReelServiceImpl implements ReelService {
                 ? fileStorageService.uploadThumbnail(thumbnailFile)
                 : (productSummary != null ? productSummary.getThumbnailUrl() : null);
 
-        // 3. Reel dokümanını kaydetme[cite: 2]
+        // 3. Reel dokümanını kaydetme
         Reel reel = Reel.builder()
                 .title(request.getTitle())
                 .description(request.getDescription())
@@ -65,10 +66,14 @@ public class ReelServiceImpl implements ReelService {
                 .durationInSeconds(request.getDurationInSeconds())
                 .productId(request.getProductId())
                 .sellerId(sellerId)
+                .likeCount(0L)
+                .viewCount(0L)
+                .likedUserIds(new HashSet<>())
+                .status("ACTIVE")
                 .build();
 
         Reel savedReel = reelRepository.save(reel);
-        return mapToReelResponse(savedReel, productSummary);
+        return mapToReelResponse(savedReel, productSummary, 0L);
     }
 
     @Override
@@ -76,7 +81,8 @@ public class ReelServiceImpl implements ReelService {
         return reelRepository.findAllByStatus("ACTIVE", pageable)
                 .map(reel -> {
                     ProductSummaryResponse summary = fetchProductSummarySafe(reel.getProductId());
-                    return mapToReelResponse(reel, summary);
+                    long commentCount = commentRepository.countByReelId(reel.getId());
+                    return mapToReelResponse(reel, summary, commentCount);
                 });
     }
 
@@ -84,7 +90,8 @@ public class ReelServiceImpl implements ReelService {
     public ReelResponse getReelById(String id) {
         Reel reel = reelRepository.findByIdAndStatus(id, "ACTIVE")
                 .orElseThrow(() -> new ResourceNotFoundException("Reel bulunamadı: " + id));
-        return mapToReelResponse(reel, fetchProductSummarySafe(reel.getProductId()));
+        long commentCount = commentRepository.countByReelId(reel.getId());
+        return mapToReelResponse(reel, fetchProductSummarySafe(reel.getProductId()), commentCount);
     }
 
     @Override
@@ -96,10 +103,23 @@ public class ReelServiceImpl implements ReelService {
 
     @Override
     public void toggleLikeReel(String id, String userId) {
-        // İlerleyen aşamada kullanıcı bazlı like koleksiyonu tutulabilir; şu an atomik +1 artırıyoruz[cite: 2]
-        Query query = new Query(Criteria.where("id").is(id));
-        Update update = new Update().inc("likeCount", 1);
-        mongoTemplate.updateFirst(query, update, Reel.class);
+        Reel reel = reelRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Reel bulunamadı: " + id));
+
+        if (reel.getLikedUserIds() == null) {
+            reel.setLikedUserIds(new HashSet<>());
+        }
+
+        // Kullanıcı daha önce beğendiyse geri al, beğenmediyse ekle
+        if (reel.getLikedUserIds().contains(userId)) {
+            reel.getLikedUserIds().remove(userId);
+            reel.setLikeCount(Math.max(0, (reel.getLikeCount() != null ? reel.getLikeCount() : 1) - 1));
+        } else {
+            reel.getLikedUserIds().add(userId);
+            reel.setLikeCount((reel.getLikeCount() != null ? reel.getLikeCount() : 0) + 1);
+        }
+
+        reelRepository.save(reel);
     }
 
     @Override
@@ -107,7 +127,7 @@ public class ReelServiceImpl implements ReelService {
         Reel reel = reelRepository.findById(reelId)
                 .orElseThrow(() -> new ResourceNotFoundException("Reel bulunamadı: " + reelId));
 
-        // Order Service üzerinden mavi tik kontrolü[cite: 2]
+        // Order Service üzerinden mavi tik kontrolü
         Boolean isVerified = false;
         try {
             isVerified = orderClient.verifyPurchase(userId, reel.getProductId());
@@ -122,6 +142,7 @@ public class ReelServiceImpl implements ReelService {
                 .content(request.getContent())
                 .isVerifiedBuyer(Boolean.TRUE.equals(isVerified))
                 .isPinned(false)
+                .likeCount(0L)
                 .build();
 
         ReelComment savedComment = commentRepository.save(comment);
@@ -144,7 +165,7 @@ public class ReelServiceImpl implements ReelService {
         Reel reel = reelRepository.findById(comment.getReelId())
                 .orElseThrow(() -> new ResourceNotFoundException("İlgili reel bulunamadı"));
 
-        // Yalnızca admin veya videonun satıcısı sabitleyebilir[cite: 2]
+        // Yalnızca admin veya videonun satıcısı sabitleyebilir
         if (!isAdmin && !reel.getSellerId().equals(currentUserId)) {
             throw new AccessDeniedException("Bu yorumu sabitleme yetkiniz bulunmamaktadır.");
         }
@@ -174,7 +195,7 @@ public class ReelServiceImpl implements ReelService {
         }
     }
 
-    private ReelResponse mapToReelResponse(Reel reel, ProductSummaryResponse product) {
+    private ReelResponse mapToReelResponse(Reel reel, ProductSummaryResponse product, long commentCount) {
         return ReelResponse.builder()
                 .id(reel.getId())
                 .title(reel.getTitle())
@@ -184,8 +205,9 @@ public class ReelServiceImpl implements ReelService {
                 .durationInSeconds(reel.getDurationInSeconds())
                 .productId(reel.getProductId())
                 .sellerId(reel.getSellerId())
-                .likeCount(reel.getLikeCount())
-                .viewCount(reel.getViewCount())
+                .likeCount(reel.getLikeCount() != null ? reel.getLikeCount() : 0)
+                .viewCount(reel.getViewCount() != null ? reel.getViewCount() : 0)
+                .commentCount(commentCount)
                 .status(reel.getStatus())
                 .createdAt(reel.getCreatedAt())
                 .product(product)
@@ -201,7 +223,7 @@ public class ReelServiceImpl implements ReelService {
                 .content(comment.getContent())
                 .isVerifiedBuyer(comment.getIsVerifiedBuyer())
                 .isPinned(comment.getIsPinned())
-                .likeCount(comment.getLikeCount())
+                .likeCount(comment.getLikeCount() != null ? comment.getLikeCount() : 0)
                 .createdAt(comment.getCreatedAt())
                 .build();
     }

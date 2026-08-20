@@ -1,30 +1,40 @@
 server:
   port: 8084
+  tomcat:
+    max-swallow-size: -1
+
 spring:
   application:
     name: discovery-media-service
   servlet:
     multipart:
-      max-file-size: 50MB       # Kısa videolar için üst limit
-      max-request-size: 55MB
-  spring:
-    security:
-      oauth2:
-        resourceserver:
-          jwt:
-            issuer-uri: http://localhost:8080/realms/ecommerce-realm
-            jwk-set-uri: http://localhost:8080/realms/ecommerce-realm/protocol/openid-connect/certs
+      enabled: true
+      max-file-size: 500MB
+      max-request-size: 500MB
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8080/realms/ecommerce-realm
+          jwk-set-uri: http://localhost:8080/realms/ecommerce-realm/protocol/openid-connect/certs
+
 minio:
   endpoint: http://localhost:9000
   access-key: minioadmin
   secret-key: minioadminpassword
-  region: us-east-1             # MinIO için varsayılan
+  region: us-east-1
   buckets:
     videos: reels-videos
     thumbnails: reels-thumbnails
+
 application:
   clients:
     product-catalog:
       url: http://localhost:8081
     order:
       url: http://localhost:8083
+
+logging:
+  level:
+    org.springframework.security: DEBUG
+    com.ecommerce.media: DEBUG

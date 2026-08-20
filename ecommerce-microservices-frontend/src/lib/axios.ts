@@ -63,3 +63,7 @@ export const crmApi = createAxiosInstance(
 export const orderApi = createAxiosInstance(
   import.meta.env.VITE_ORDER_API ?? 'http://localhost:8083/api/v1'
 );
+
+export const reelsApi = createAxiosInstance(
+  import.meta.env.VITE_REELS_API ?? 'http://localhost:8084/api/v1'
+);
