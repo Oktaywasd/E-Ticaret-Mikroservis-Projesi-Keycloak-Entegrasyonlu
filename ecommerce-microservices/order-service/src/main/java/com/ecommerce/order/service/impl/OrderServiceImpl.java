@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -38,7 +39,7 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponseDto createOrder(CreateOrderRequestDto requestDto, String keycloakUserId) {
         log.info("Creating order for user: {}", keycloakUserId);
 
-        // 1. CRM Service üzerinden adres varlık kontrolü (Adres yoksa Feign ErrorDecoder fırlatır)
+        // 1. CRM Service üzerinden adres varlık kontrolü
         crmClient.getAddressById(requestDto.getAddressId());
 
         BigDecimal grandTotal = BigDecimal.ZERO;
@@ -48,13 +49,11 @@ public class OrderServiceImpl implements OrderService {
         for (OrderItemRequestDto itemDto : requestDto.getItems()) {
             ProductResponseDto product = productCatalogClient.getProductById(itemDto.getProductId());
 
-            // GÜNCELLENDİ: helper method ile stok kontrolü
             if (product.getCurrentStockCount() < itemDto.getQuantity()) {
                 throw new BusinessException("Insufficient stock for product: " + product.getName() +
                         ". Available stock: " + product.getCurrentStockCount());
             }
 
-            // GÜNCELLENDİ: helper method ile geçerli/indirimli fiyat üzerinden birim fiyat tespiti
             BigDecimal unitPrice = product.getEffectivePrice();
             BigDecimal itemTotal = unitPrice.multiply(BigDecimal.valueOf(itemDto.getQuantity()));
             grandTotal = grandTotal.add(itemTotal);
@@ -70,13 +69,19 @@ public class OrderServiceImpl implements OrderService {
             orderItems.add(orderItem);
         }
 
-        // 3. Siparişi veritabanına kaydetme
+        // Benzersiz ORD-XXXXXX üret
+        String uniqueOrderCode = generateUniqueOrderCode();
+
+        // 3. Siparişi veritabanına kaydetme (orderCode eklendi)
         Order order = Order.builder()
+                .orderCode(uniqueOrderCode) // <--- EKLENDİ
                 .keycloakUserId(keycloakUserId)
                 .addressId(requestDto.getAddressId())
                 .items(orderItems)
                 .totalAmount(grandTotal)
                 .status(OrderStatus.CREATED)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
                 .build();
 
         Order savedOrder = orderRepository.save(order);
@@ -86,7 +91,7 @@ public class OrderServiceImpl implements OrderService {
             productCatalogClient.reduceStock(item.getProductId(), item.getQuantity());
         }
 
-        log.info("Order created successfully with ID: {}", savedOrder.getId());
+        log.info("Order created successfully with ID: {} and Code: {}", savedOrder.getId(), uniqueOrderCode);
         return orderMapper.toOrderResponseDto(savedOrder);
     }
 
@@ -130,6 +135,7 @@ public class OrderServiceImpl implements OrderService {
         validateStatusTransition(order.getStatus(), newStatus);
 
         order.setStatus(newStatus);
+        order.setUpdatedAt(LocalDateTime.now());
         Order updatedOrder = orderRepository.save(order);
         log.info("Order status updated to {} for order ID: {}", newStatus, orderId);
 
@@ -154,6 +160,7 @@ public class OrderServiceImpl implements OrderService {
         }
 
         order.setStatus(OrderStatus.CANCELLED);
+        order.setUpdatedAt(LocalDateTime.now());
         Order cancelledOrder = orderRepository.save(order);
 
         // İptal edilen siparişteki tüm ürünlerin stoğunu Catalog servisine iade et
@@ -171,7 +178,8 @@ public class OrderServiceImpl implements OrderService {
         log.info("Order cancelled successfully with ID: {}", orderId);
         return orderMapper.toOrderResponseDto(cancelledOrder);
     }
-//mavi tik için eklendi
+
+    // mavi tik için eklendi
     @Override
     public Boolean verifyUserPurchasedProduct(String userId, String productId) {
         return orderRepository.existsByKeycloakUserIdAndStatusInAndItems_ProductId(

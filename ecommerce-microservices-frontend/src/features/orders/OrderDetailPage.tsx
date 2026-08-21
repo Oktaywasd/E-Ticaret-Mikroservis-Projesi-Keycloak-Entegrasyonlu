@@ -6,9 +6,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorMessage } from '@/components/ui/error-message';
 import { DeleteConfirmModal } from '@/components/ui/delete-confirm-modal';
 import { useMyOrder, useCancelMyOrder } from './useOrderQueries';
-import { useProfile } from '@/features/crm/useCrmQueries';
 import { useState, useEffect } from 'react';
-import { fetchAddressById } from '@/features/crm/crmService';
+import { fetchAddressById, fetchProfileByUserId } from '@/features/crm/crmService';
 import { toast } from 'sonner';
 import type { OrderStatus } from './types';
 import { formatOrderNumber } from '@/utils/formatters';
@@ -30,7 +29,7 @@ export function OrderDetailPage() {
   const cancelOrder = useCancelMyOrder();
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [addressDetails, setAddressDetails] = useState<any>(null);
-  const { data: profile } = useProfile();
+  const [customerProfile, setCustomerProfile] = useState<any>(null);
 
   const handleCancelOrder = () => {
     if (!window.confirm("Siparişi iptal etmek istediğinize emin misiniz?")) {
@@ -59,6 +58,16 @@ export function OrderDetailPage() {
         .then((data) => setAddressDetails(data))
         .catch((err) => console.error("Adres detayları çekilemedi:", err));
     }
+
+    if ((order as any)?.keycloakUserId) {
+      fetchProfileByUserId((order as any).keycloakUserId)
+        .then((res) => {
+          setCustomerProfile(res);
+        })
+        .catch((err) => {
+          console.error("Failed to fetch customer profile for order", err);
+        });
+    }
   }, [order]);
 
   console.log("Gelen Sipariş Detayı:", order);
@@ -85,6 +94,14 @@ export function OrderDetailPage() {
   const total = (order as any)?.totalAmount || (order as any)?.totalPrice || (order as any)?.total || 0;
   const address = addressDetails || (order as any)?.shippingAddress || (order as any)?.deliveryAddress || (order as any)?.address || {};
   const billingAddress = (order as any)?.billingAddress || address;
+
+  const customerFullName = customerProfile?.firstName && customerProfile?.lastName
+    ? `${customerProfile.firstName} ${customerProfile.lastName}`
+    : customerProfile?.firstName || address?.fullName || address?.recipientName || order?.customerName || order?.userEmail || 'Müşteri';
+
+  const billingCustomerFullName = customerProfile?.firstName && customerProfile?.lastName
+    ? `${customerProfile.firstName} ${customerProfile.lastName}`
+    : customerProfile?.firstName || billingAddress?.fullName || billingAddress?.recipientName || order?.customerName || order?.userEmail || 'Müşteri';
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl space-y-6">
@@ -219,45 +236,71 @@ export function OrderDetailPage() {
         {/* Addresses & Info */}
         <div className="space-y-6">
           <div className="rounded-xl border border-border/50 bg-card p-5">
-            <h3 className="font-semibold mb-3 flex items-center gap-2">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2">
               <MapPin className="h-4 w-4 text-violet-400" />
-              {address?.addressTitle || address?.title || "Teslimat Adresi"}
-            </h3>
-            <div className="space-y-1 text-sm text-muted-foreground">
-              {(address?.fullName || profile) && (
-                <p className="font-medium text-foreground">
-                  {address?.fullName || (profile ? `${profile.firstName} ${profile.lastName}`.trim() : '')}
-                </p>
-              )}
-              {address?.phone && <p>{address.phone}</p>}
-              <p className={address?.fullName || profile || address?.phone ? "pt-2" : ""}>
-                {address?.addressLine || address?.street || address?.fullAddress || '-'}
-              </p>
-              <p>{`${address?.district || address?.state || '-'} / ${address?.city || '-'}`}</p>
-              <p>{`${address?.country || '-'} ${address?.zipCode || ''}`.trim()}</p>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-border/50 bg-card p-5">
-            <h3 className="font-semibold mb-3 flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-indigo-400" />
-              {billingAddress?.addressTitle || billingAddress?.title || "Fatura Adresi"}
-            </h3>
-            <div className="space-y-1 text-sm text-muted-foreground">
-              {(billingAddress?.fullName || profile) && (
-                <p className="font-medium text-foreground">
-                  {billingAddress?.fullName || (profile ? `${profile.firstName} ${profile.lastName}`.trim() : '')}
-                </p>
-              )}
-              {billingAddress?.phone && <p>{billingAddress.phone}</p>}
-              <p className={billingAddress?.fullName || profile || billingAddress?.phone ? "pt-2" : ""}>
-                {billingAddress?.addressLine || billingAddress?.street || billingAddress?.fullAddress || '-'}
-              </p>
-              <p>{`${billingAddress?.district || billingAddress?.state || '-'} / ${billingAddress?.city || '-'}`}</p>
-              <p>{`${billingAddress?.country || '-'} ${billingAddress?.zipCode || ''}`.trim()}</p>
-            </div>
+              Teslimat Adresi
+            </h4>
+            
+            {addressDetails === null && ((order as any)?.addressId || (order as any)?.shippingAddressId) ? (
+              <p className="text-xs text-muted-foreground mt-1">Adres bilgisi yükleniyor...</p>
+            ) : address ? (
+              <>
+                <div className="text-sm font-medium text-foreground mb-3">
+                  {customerFullName}
+                </div>
+                <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                  {address.title && (
+                    <span className="inline-block px-2 py-0.5 rounded bg-muted text-foreground font-semibold mb-2 text-xs">
+                      {address.title}
+                    </span>
+                  )}
+                  {address.phone && <p>{address.phone}</p>}
+                  <p className="leading-relaxed">
+                    {address.addressLine || address.street || address.fullAddress || '-'}
+                  </p>
+                  <p className="opacity-80">
+                    {[address.district || address.state, address.city, address.country, address.zipCode || address.postalCode].filter(Boolean).join(' / ')}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-destructive mt-1">Adres detayları alınamadı</p>
+            )}
           </div>
           
+          <div className="rounded-xl border border-border/50 bg-card p-5">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-indigo-400" />
+              Fatura Adresi
+            </h4>
+            
+            {addressDetails === null && ((order as any)?.addressId || (order as any)?.shippingAddressId) ? (
+              <p className="text-xs text-muted-foreground mt-1">Adres bilgisi yükleniyor...</p>
+            ) : billingAddress ? (
+              <>
+                <div className="text-sm font-medium text-foreground mb-3">
+                  {billingCustomerFullName}
+                </div>
+                <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                  {billingAddress.title && (
+                    <span className="inline-block px-2 py-0.5 rounded bg-muted text-foreground font-semibold mb-2 text-xs">
+                      {billingAddress.title}
+                    </span>
+                  )}
+                  {billingAddress.phone && <p>{billingAddress.phone}</p>}
+                  <p className="leading-relaxed">
+                    {billingAddress.addressLine || billingAddress.street || billingAddress.fullAddress || '-'}
+                  </p>
+                  <p className="opacity-80">
+                    {[billingAddress.district || billingAddress.state, billingAddress.city, billingAddress.country, billingAddress.zipCode || billingAddress.postalCode].filter(Boolean).join(' / ')}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <p className="text-xs text-destructive mt-1">Adres detayları alınamadı</p>
+            )}
+          </div>
+
           <div className="rounded-xl border border-border/50 bg-card p-5 text-sm">
             <p className="text-muted-foreground mb-1">Sipariş Tarihi</p>
             <p className="font-medium">{order?.createdAt ? new Date(order.createdAt).toLocaleString('tr-TR') : '-'}</p>

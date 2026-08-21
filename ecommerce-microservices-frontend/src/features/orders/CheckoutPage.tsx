@@ -23,10 +23,10 @@ export function CheckoutPage() {
 
   // Pre-select first address
   useEffect(() => {
-    if (addresses?.length && !selectedShippingId) {
+    if (addresses && addresses.length > 0 && !selectedShippingId) {
       const def = addresses[0];
-      setSelectedShippingId(def.id);
-      if (sameAsShipping) setSelectedBillingId(def.id);
+      setSelectedShippingId(def.id || (def as any).addressId);
+      if (sameAsShipping) setSelectedBillingId(def.id || (def as any).addressId);
     }
   }, [addresses, selectedShippingId, sameAsShipping]);
 
@@ -46,17 +46,17 @@ export function CheckoutPage() {
   const handleCheckout = () => {
     if (!selectedShippingId || (!sameAsShipping && !selectedBillingId)) return;
 
-    const shipAddr = addresses?.find((a) => a.id === selectedShippingId);
-    const billAddr = sameAsShipping ? shipAddr : addresses?.find((a) => a.id === selectedBillingId);
+    const shipAddr = addresses?.find((a) => a.id === selectedShippingId || (a as any).addressId === selectedShippingId);
+    const billAddr = sameAsShipping ? shipAddr : addresses?.find((a) => a.id === selectedBillingId || (a as any).addressId === selectedBillingId);
 
     if (!shipAddr || !billAddr) return;
 
-
+    const finalAddressId = shipAddr.id || (shipAddr as any).addressId || selectedShippingId;
 
     const payload: CreateOrderRequest = {
-      addressId: shipAddr.id,
+      addressId: finalAddressId,
       items: items.map((i: any) => ({
-        productId: i.id || i.productId,
+        productId: i.productId || i.id,
         quantity: i.quantity,
         price: i.price,
       })),

@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Plus, Search, Edit2, Trash2, Package, Archive, BarChart2,
+  Plus, Search, Edit2, Trash2, Package, Archive, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,16 +11,15 @@ import { ErrorMessage } from '@/components/ui/error-message';
 import { Pagination } from '@/components/ui/pagination';
 import { DeleteConfirmModal } from '@/components/ui/delete-confirm-modal';
 import { StockUpdateModal } from './StockUpdateModal';
-import { useProducts, useDeleteProduct } from './useProductQueries';
+import { useProducts, useDeleteProduct, useCategories } from './useProductQueries';
 import type { Product } from './types';
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 50; // Increased to allow better local filtering coverage
 
 export function AdminProductsPage() {
   const navigate = useNavigate();
   const [page, setPage] = useState(0);
-  const [search, setSearch] = useState('');
-  const [draftSearch, setDraftSearch] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [includeDeleted, setIncludeDeleted] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState<Product | null>(null);
@@ -29,16 +28,42 @@ export function AdminProductsPage() {
   const { data, isLoading, isError, error, refetch } = useProducts({
     page,
     size: PAGE_SIZE,
-    name: search || undefined,
     includeDeleted,
   });
+  
+  const { data: categories } = useCategories();
+
+  const products = data?.content || [];
+
+  const categoryMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (categories) {
+      categories.forEach((cat: any) => {
+        map[cat.id] = cat.name || cat.title;
+      });
+    }
+    return map;
+  }, [categories]);
+
+  const filteredProducts = useMemo(() => {
+    if (!searchTerm.trim()) return products;
+    const query = searchTerm.toLowerCase().trim();
+    return products.filter((p) => {
+      const catName = p.categoryName || p.category?.name || categoryMap[p.categoryId] || '';
+      return p.name?.toLowerCase().includes(query) ||
+             p.productCode?.toLowerCase().includes(query) ||
+             catName.toLowerCase().includes(query);
+    });
+  }, [products, searchTerm, categoryMap]);
 
   const { mutate: deleteProduct, isPending: deleting } = useDeleteProduct();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    setSearch(draftSearch);
-    setPage(0);
+  };
+
+  const clearSearch = () => {
+    setSearchTerm('');
   };
 
   const handleDelete = () => {
@@ -63,9 +88,7 @@ export function AdminProductsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold">Ürün Yönetimi</h1>
-          {data && (
-            <p className="text-sm text-muted-foreground">{data.totalElements} ürün</p>
-          )}
+          <p className="text-sm text-muted-foreground">{filteredProducts.length} ürün listeleniyor</p>
         </div>
         <Button
           id="add-product-button"
@@ -79,28 +102,28 @@ export function AdminProductsPage() {
 
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3">
-        <form onSubmit={handleSearch} className="flex gap-2 flex-1">
+        <form onSubmit={handleSearch} className="flex gap-2 flex-1 relative">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               id="admin-products-search"
-              placeholder="Ürün adı ara…"
-              value={draftSearch}
-              onChange={(e) => setDraftSearch(e.target.value)}
-              className="pl-9"
+              placeholder="Ürün adı, stok kodu veya kategori ara…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 pr-10"
             />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={clearSearch}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
           <Button type="submit" variant="outline" size="sm">Ara</Button>
         </form>
-
-        <Button
-          variant={includeDeleted ? 'secondary' : 'outline'}
-          size="sm"
-          onClick={() => { setIncludeDeleted((v) => !v); setPage(0); }}
-        >
-          <Archive className="h-4 w-4 mr-2" />
-          {includeDeleted ? 'Silinenler Dahil' : 'Aktif Ürünler'}
-        </Button>
       </div>
 
       {/* Table */}
@@ -115,7 +138,6 @@ export function AdminProductsPage() {
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden sm:table-cell">Kategori</th>
                 <th className="px-4 py-3 text-right font-medium text-muted-foreground">Fiyat</th>
                 <th className="px-4 py-3 text-right font-medium text-muted-foreground">Stok</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden md:table-cell">Durum</th>
                 <th className="px-4 py-3 text-right font-medium text-muted-foreground">İşlem</th>
               </tr>
             </thead>
@@ -127,22 +149,21 @@ export function AdminProductsPage() {
                       <td className="px-4 py-3 hidden sm:table-cell"><Skeleton className="h-4 w-20" /></td>
                       <td className="px-4 py-3"><Skeleton className="h-4 w-16 ml-auto" /></td>
                       <td className="px-4 py-3"><Skeleton className="h-4 w-10 ml-auto" /></td>
-                      <td className="px-4 py-3 hidden md:table-cell"><Skeleton className="h-5 w-14" /></td>
                       <td className="px-4 py-3"><Skeleton className="h-8 w-20 ml-auto" /></td>
                     </tr>
                   ))
-                : !data?.content.length
+                : !filteredProducts.length
                 ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                      <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
                         <div className="flex flex-col items-center gap-3">
                           <Package className="h-8 w-8 text-muted-foreground/40" />
-                          <p>Ürün bulunamadı</p>
+                          <p>{searchTerm ? 'Aramanızla eşleşen ürün bulunamadı.' : 'Ürün bulunamadı'}</p>
                         </div>
                       </td>
                     </tr>
                   )
-                : data.content.map((product) => (
+                : filteredProducts.map((product) => (
                     <tr
                       key={product.id}
                       className={`border-b border-border/30 hover:bg-muted/20 transition-colors ${
@@ -172,7 +193,9 @@ export function AdminProductsPage() {
 
                       {/* Category */}
                       <td className="px-4 py-3 hidden sm:table-cell">
-                        <span className="text-muted-foreground">{product.category?.name}</span>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-violet-500/10 text-violet-500 border border-violet-500/20">
+                          {product.categoryName || product.category?.name || categoryMap[product.categoryId] || 'Kategorisiz'}
+                        </span>
                       </td>
 
                       {/* Price */}
@@ -198,17 +221,6 @@ export function AdminProductsPage() {
                             {product.stock.currentStock}
                           </span>
                         </button>
-                      </td>
-
-                      {/* Status */}
-                      <td className="px-4 py-3 hidden md:table-cell">
-                        {product.deleted ? (
-                          <Badge variant="destructive">Silindi</Badge>
-                        ) : product.active ? (
-                          <Badge variant="success">Aktif</Badge>
-                        ) : (
-                          <Badge variant="warning">Pasif</Badge>
-                        )}
                       </td>
 
                       {/* Actions */}

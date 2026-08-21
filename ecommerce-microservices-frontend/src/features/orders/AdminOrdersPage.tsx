@@ -1,4 +1,51 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { fetchAddressById } from '@/features/crm/crmService';
+
+function AddressBlock({ order, customerName }: { order: any, customerName: string }) {
+  const [address, setAddress] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+  
+  const addressId = order.deliveryAddress?.id || order.addressId;
+
+  useEffect(() => {
+    if (addressId) {
+      setLoading(true);
+      fetchAddressById(addressId)
+        .then(res => setAddress(res))
+        .catch(() => setError(true))
+        .finally(() => setLoading(false));
+    }
+  }, [addressId]);
+
+  return (
+    <div>
+      <p className="font-semibold mb-1">Teslimat Adresi</p>
+      <div className="bg-background rounded-lg p-3 border border-border/50 text-muted-foreground text-xs space-y-1">
+        <p className="font-medium text-foreground">{customerName}</p>
+        {!addressId ? (
+          <p>Adres ID bulunamadı.</p>
+        ) : loading ? (
+          <p className="animate-pulse">Adres bilgisi yükleniyor...</p>
+        ) : error || !address ? (
+          <p className="text-destructive">Adres detayları alınamadı.</p>
+        ) : (
+          <div className="mt-2 space-y-1">
+            {address.title && (
+              <span className="inline-block px-2 py-0.5 rounded bg-muted text-foreground font-semibold mb-1">
+                {address.title}
+              </span>
+            )}
+            <p className="leading-relaxed">{address.addressLine || address.street}</p>
+            <p className="opacity-70">
+              {[address.district, address.city, address.country, address.zipCode].filter(Boolean).join(' / ')}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 import { Link } from 'react-router-dom';
 import { Package, Clock, CheckCircle2, Truck, XCircle, ChevronDown, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,6 +55,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorMessage } from '@/components/ui/error-message';
 import { Pagination } from '@/components/ui/pagination';
 import { useAdminOrders, useUpdateOrderStatus } from './useOrderQueries';
+import { useAdminUsers } from '@/features/crm/useCrmQueries';
 import type { OrderStatus } from './types';
 
 const PAGE_SIZE = 10;
@@ -33,6 +81,23 @@ export function AdminOrdersPage() {
     sort: 'createdAt,desc',
     status: statusFilter || undefined,
   });
+
+  const { data: userProfiles } = useAdminUsers();
+
+  const customerMap = useMemo(() => {
+    const map: Record<string, { name: string; email: string }> = {};
+    if (userProfiles) {
+      userProfiles.forEach((u: any) => {
+        const id = u.keycloakUserId || u.id;
+        const fullName = [u.firstName, u.lastName].filter(Boolean).join(' ');
+        map[id] = {
+          name: fullName.trim() || u.email || 'Bilinmeyen Müşteri',
+          email: u.email || ''
+        };
+      });
+    }
+    return map;
+  }, [userProfiles]);
 
   const updateStatus = useUpdateOrderStatus();
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
@@ -141,7 +206,10 @@ export function AdminOrdersPage() {
                     const totalAmount = typeof order?.totalAmount === 'object' ? (order?.totalAmount?.amount || 0) : Number(order?.totalAmount || order?.totalPrice || 0);
                     const status = order?.status || order?.orderStatus || "PENDING";
                     
-                    const customerText = order.customerName || order.userEmail || (order.keycloakUserId ? `Müşteri (${order.keycloakUserId.substring(0, 8)}...)` : "Müşteri");
+                    const customer = customerMap[order.keycloakUserId];
+                    const customerName = customer?.name || order.customerName || order.userEmail || (order.keycloakUserId ? `Müşteri (${order.keycloakUserId.substring(0, 8)}...)` : "Misafir Müşteri");
+                    const customerEmail = customer?.email || '';
+                    
                     const addressText = order.deliveryAddress?.addressLine || order.addressLine || (order.addressId ? `Adres ID: ${order.addressId}` : "Adres bilgisi girilmedi");
                     const cityInfo = order.deliveryAddress?.city ? `${order.deliveryAddress.city}, ${order.deliveryAddress.district || ''}` : (order.shippingAddress?.city ? `${order.shippingAddress.city}, ${order.shippingAddress.district || ''}` : "-");
                     
@@ -156,8 +224,17 @@ export function AdminOrdersPage() {
                         <tr className="border-b border-border/30 hover:bg-muted/10 transition-colors group">
                           <td className="px-4 py-3 font-mono text-xs font-bold" title={order.id}>{orderNumber}</td>
                           <td className="px-4 py-3">{orderDate}</td>
-                          <td className="px-4 py-3 hidden sm:table-cell truncate max-w-[150px]">
-                            {customerText}
+                          <td className="px-4 py-3 hidden sm:table-cell">
+                            <div className="flex flex-col truncate max-w-[150px]">
+                              <span className="text-sm font-medium">
+                                {customerName}
+                              </span>
+                              {customerEmail && (
+                                <span className="text-xs text-muted-foreground truncate">
+                                  {customerEmail}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-4 py-3 text-right font-semibold">
                             {totalAmount.toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}
@@ -209,14 +286,7 @@ export function AdminOrdersPage() {
                                 </div>
                               </div>
                               <div className="space-y-4">
-                                <div>
-                                  <p className="font-semibold mb-1">Teslimat Adresi</p>
-                                  <div className="bg-background rounded-lg p-3 border border-border/50 text-muted-foreground text-xs space-y-1">
-                                    <p className="font-medium text-foreground">{customerText}</p>
-                                    <p>{addressText}</p>
-                                    <p>{cityInfo}</p>
-                                  </div>
-                                </div>
+                                <AddressBlock order={order} customerName={customerName} />
                                 <div className="flex justify-end">
                                   <Button variant="outline" size="sm" asChild>
                                     <Link to={`/orders/${order.id}`}>

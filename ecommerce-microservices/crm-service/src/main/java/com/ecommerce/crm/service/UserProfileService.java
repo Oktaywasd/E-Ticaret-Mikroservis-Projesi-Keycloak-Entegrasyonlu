@@ -82,4 +82,15 @@ public class UserProfileService {
         UserProfile updatedProfile = userProfileRepository.save(profile);
         return userProfileMapper.toResponse(updatedProfile);
     }
+
+    /**
+     * Tüm kullanıcı profillerini getirir (Admin kullanımı için).
+     */
+    @Transactional(readOnly = true)
+    public java.util.List<UserProfileResponse> getAllProfiles() {
+        return userProfileRepository.findAll()
+                .stream()
+                .map(userProfileMapper::toResponse)
+                .collect(java.util.stream.Collectors.toList());
+    }
 }

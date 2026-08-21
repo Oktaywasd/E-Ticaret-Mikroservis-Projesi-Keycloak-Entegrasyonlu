@@ -50,6 +50,8 @@ export interface AdminUser {
   email: string;
   firstName?: string;
   lastName?: string;
+  phoneNumber?: string;
+  keycloakUserId?: string;
   enabled: boolean;
   roles: AppRole[];
   createdTimestamp?: number;

@@ -54,4 +54,22 @@ public class UserProfileController {
         UserProfileResponse response = userProfileService.updateProfile(keycloakUserId, request);
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * Tüm kullanıcıları listeler (Admin rolü gerektirir).
+     */
+    @GetMapping("/all")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<java.util.List<UserProfileResponse>> getAllUsers() {
+        return ResponseEntity.ok(userProfileService.getAllProfiles());
+    }
+
+    /**
+     * Adminlerin veya servislerin spesifik bir Keycloak User ID ile profil sorgulamasına izin verir.
+     */
+    @GetMapping("/{keycloakUserId}")
+    public ResponseEntity<UserProfileResponse> getProfileByUserId(@PathVariable UUID keycloakUserId) {
+        UserProfileResponse response = userProfileService.getProfileByKeycloakUserId(keycloakUserId);
+        return ResponseEntity.ok(response);
+    }
 }

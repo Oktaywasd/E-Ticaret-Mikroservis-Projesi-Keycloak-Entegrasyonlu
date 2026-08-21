@@ -22,6 +22,12 @@ export async function fetchMyProfile(): Promise<UserProfile> {
   return data;
 }
 
+/** Get an arbitrary user's profile by their Keycloak User ID */
+export async function fetchProfileByUserId(keycloakUserId: string): Promise<UserProfile> {
+  const { data } = await crmApi.get<UserProfile>(`/profile/${keycloakUserId}`);
+  return data;
+}
+
 /** Create profile on first login / onboarding */
 export async function createProfile(payload: CreateProfileRequest): Promise<UserProfile> {
   const { data } = await crmApi.post<UserProfile>('/profile', payload);
@@ -75,8 +81,19 @@ export async function deleteAddress(id: string): Promise<void> {
 // Admin endpoint'leri belirtilmemiş, eski haliyle "/admin/users" kalsın.
 
 export async function fetchAllUsers(): Promise<AdminUser[]> {
-  const { data } = await crmApi.get<AdminUser[]>('/admin/users');
-  return data;
+  const { data } = await crmApi.get<any[]>('/profile/all');
+  return data.map(profile => ({
+    id: profile.keycloakUserId || profile.id,
+    username: profile.email || profile.firstName,
+    email: profile.email,
+    firstName: profile.firstName,
+    lastName: profile.lastName,
+    enabled: true,
+    roles: profile.roles || ['ROLE_CUSTOMER'],
+    createdTimestamp: profile.createdAt ? new Date(profile.createdAt).getTime() : undefined,
+    phoneNumber: profile.phoneNumber,
+    keycloakUserId: profile.keycloakUserId
+  }));
 }
 
 export async function fetchUserById(userId: string): Promise<AdminUser> {

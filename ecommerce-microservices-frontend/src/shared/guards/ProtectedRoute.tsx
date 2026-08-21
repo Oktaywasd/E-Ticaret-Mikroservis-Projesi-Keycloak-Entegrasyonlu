@@ -2,19 +2,13 @@ import { useEffect } from 'react';
 import { useAuth } from 'react-oidc-context';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import type { AppRole } from '@/types';
-import { hasRole } from '@/lib/auth';
+import { toast } from 'sonner';
 
 interface ProtectedRouteProps {
   children?: React.ReactNode;
   requiredRoles?: AppRole[];
 }
 
-/**
- * Guards a route behind Keycloak authentication.
- * If `children` is provided, renders it (useful for wrapping Layout components that use <Outlet>).
- * Otherwise renders <Outlet> directly.
- * Optionally checks roles — redirects to /unauthorized if user lacks required roles.
- */
 export function ProtectedRoute({ children, requiredRoles }: ProtectedRouteProps) {
   const auth = useAuth();
   const location = useLocation();
@@ -46,28 +40,35 @@ export function ProtectedRoute({ children, requiredRoles }: ProtectedRouteProps)
 
   if (requiredRoles && requiredRoles.length > 0) {
     const profile = auth.user?.profile as any;
-    console.log("Current User Roles:", profile?.roles, profile?.realm_access?.roles, profile?.resource_access);
     
+    // Parse the access token payload to ensure we extract Keycloak realm/resource roles reliably
+    let tokenParsed: any = profile;
+    if (auth.user?.access_token) {
+      try {
+        const payload = auth.user.access_token.split('.')[1];
+        tokenParsed = { ...profile, ...JSON.parse(atob(payload)) };
+      } catch (e) {
+        console.error('Failed to parse access token', e);
+      }
+    }
+
     const userRoles = [
-      ...(profile?.realm_access?.roles || []),
-      ...(profile?.resource_access?.['eshop-client']?.roles || []),
-      ...(profile?.roles || [])
+      ...(tokenParsed?.realm_access?.roles || []),
+      ...(tokenParsed?.resource_access?.['eshop-client']?.roles || []), // Replace with actual client_id if different
+      ...(tokenParsed?.roles || [])
     ].map((r: string) => r.toUpperCase());
 
-    const isAllowed = userRoles.some(r => 
-      r.includes('SELLER') || r.includes('ADMIN') || r.includes('ROLE_ADMIN')
+    const isAllowed = requiredRoles.some(role => 
+      userRoles.includes(role.toUpperCase()) || 
+      userRoles.includes(`ROLE_${role.toUpperCase()}`)
     );
     
-    const allowAccess = isAllowed || true; // Forced bypass
-
-    if (!allowAccess) {
+    if (!isAllowed) {
+      toast.error('Bu sayfaya erişim yetkiniz bulunmamaktadır.', { id: 'unauthorized' });
       return <Navigate to="/unauthorized" replace />;
     }
   }
 
-  // When wrapping a layout (children present), render it — the layout uses <Outlet> internally
   if (children) return <>{children}</>;
-
-  // Otherwise render nested routes via Outlet
   return <Outlet />;
 }

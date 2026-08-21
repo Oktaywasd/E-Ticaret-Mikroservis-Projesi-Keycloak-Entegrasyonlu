@@ -82,7 +82,7 @@ export function AppRouter() {
       {/* ─── Admin / Seller Routes ──────────────────────── */}
       <Route
         element={
-          <ProtectedRoute requiredRoles={['ROLE_ADMIN', 'ADMIN', 'SELLER'] as any}>
+          <ProtectedRoute requiredRoles={['ADMIN'] as any}>
             <AdminLayout />
           </ProtectedRoute>
         }
