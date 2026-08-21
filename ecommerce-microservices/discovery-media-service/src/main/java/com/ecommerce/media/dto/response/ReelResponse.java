@@ -1,9 +1,11 @@
 package com.ecommerce.media.dto.response;
 
+
 import lombok.Builder;
 import lombok.Data;
 
 import java.time.Instant;
+import java.util.Set;
 
 @Data
 @Builder
@@ -18,10 +20,12 @@ public class ReelResponse {
     private String sellerId;
     private Long likeCount;
     private Long viewCount;
+    private Set<String> likedUserIds;
+    private Set<String> viewedUserIds;
     private String status;
     private Instant createdAt;
 
-    // Feign ile Catalog servisinden doldurulacak ürün özeti
+    private String productName;
     private ProductSummaryResponse product;
 
     private Long commentCount;

@@ -10,6 +10,7 @@ import com.ecommerce.media.dto.response.ReelResponse;
 import com.ecommerce.media.exception.ResourceNotFoundException;
 import com.ecommerce.media.model.Reel;
 import com.ecommerce.media.model.ReelComment;
+
 import com.ecommerce.media.repository.ReelCommentRepository;
 import com.ecommerce.media.repository.ReelRepository;
 import com.ecommerce.media.service.FileStorageService;
@@ -19,15 +20,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
-import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -43,7 +42,6 @@ public class ReelServiceImpl implements ReelService {
 
     @Override
     public ReelResponse uploadReel(CreateReelRequest request, MultipartFile videoFile, MultipartFile thumbnailFile, String sellerId) {
-        // 1. Catalog servisinden ürün doğrulama ve özet bilgi alma
         ProductSummaryResponse productSummary = null;
         try {
             productSummary = productCatalogClient.getProductSummaryById(request.getProductId());
@@ -51,13 +49,11 @@ public class ReelServiceImpl implements ReelService {
             log.warn("Ürün bilgisi catalog servisinden alınamadı: {}", e.getMessage());
         }
 
-        // 2. MinIO'ya video ve thumbnail yükleme
         String videoUrl = fileStorageService.uploadVideo(videoFile);
         String thumbnailUrl = (thumbnailFile != null && !thumbnailFile.isEmpty())
                 ? fileStorageService.uploadThumbnail(thumbnailFile)
                 : (productSummary != null ? productSummary.getThumbnailUrl() : null);
 
-        // 3. Reel dokümanını kaydetme
         Reel reel = Reel.builder()
                 .title(request.getTitle())
                 .description(request.getDescription())
@@ -69,6 +65,7 @@ public class ReelServiceImpl implements ReelService {
                 .likeCount(0L)
                 .viewCount(0L)
                 .likedUserIds(new HashSet<>())
+                .viewedUserIds(new HashSet<>())
                 .status("ACTIVE")
                 .build();
 
@@ -95,10 +92,22 @@ public class ReelServiceImpl implements ReelService {
     }
 
     @Override
-    public void incrementViewCount(String id) {
-        Query query = new Query(Criteria.where("id").is(id));
-        Update update = new Update().inc("viewCount", 1);
-        mongoTemplate.updateFirst(query, update, Reel.class);
+    public void incrementViewCount(String id, String userId) {
+        Reel reel = reelRepository.findById(id).orElse(null);
+        if (reel == null) {
+            return;
+        }
+
+        reel.setViewCount((reel.getViewCount() != null ? reel.getViewCount() : 0) + 1);
+
+        if (userId != null && !userId.isBlank()) {
+            if (reel.getViewedUserIds() == null) {
+                reel.setViewedUserIds(new HashSet<>());
+            }
+            reel.getViewedUserIds().add(userId);
+        }
+
+        reelRepository.save(reel);
     }
 
     @Override
@@ -110,7 +119,6 @@ public class ReelServiceImpl implements ReelService {
             reel.setLikedUserIds(new HashSet<>());
         }
 
-        // Kullanıcı daha önce beğendiyse geri al, beğenmediyse ekle
         if (reel.getLikedUserIds().contains(userId)) {
             reel.getLikedUserIds().remove(userId);
             reel.setLikeCount(Math.max(0, (reel.getLikeCount() != null ? reel.getLikeCount() : 1) - 1));
@@ -127,7 +135,6 @@ public class ReelServiceImpl implements ReelService {
         Reel reel = reelRepository.findById(reelId)
                 .orElseThrow(() -> new ResourceNotFoundException("Reel bulunamadı: " + reelId));
 
-        // Order Service üzerinden mavi tik kontrolü
         Boolean isVerified = false;
         try {
             isVerified = orderClient.verifyPurchase(userId, reel.getProductId());
@@ -165,7 +172,6 @@ public class ReelServiceImpl implements ReelService {
         Reel reel = reelRepository.findById(comment.getReelId())
                 .orElseThrow(() -> new ResourceNotFoundException("İlgili reel bulunamadı"));
 
-        // Yalnızca admin veya videonun satıcısı sabitleyebilir
         if (!isAdmin && !reel.getSellerId().equals(currentUserId)) {
             throw new AccessDeniedException("Bu yorumu sabitleme yetkiniz bulunmamaktadır.");
         }
@@ -196,6 +202,16 @@ public class ReelServiceImpl implements ReelService {
     }
 
     private ReelResponse mapToReelResponse(Reel reel, ProductSummaryResponse product, long commentCount) {
+        Set<String> finalLikedUsers = new HashSet<>();
+        if (reel.getLikedUserIds() != null) {
+            finalLikedUsers.addAll(reel.getLikedUserIds());
+        }
+
+        Set<String> finalViewedUsers = new HashSet<>();
+        if (reel.getViewedUserIds() != null) {
+            finalViewedUsers.addAll(reel.getViewedUserIds());
+        }
+
         return ReelResponse.builder()
                 .id(reel.getId())
                 .title(reel.getTitle())
@@ -207,9 +223,12 @@ public class ReelServiceImpl implements ReelService {
                 .sellerId(reel.getSellerId())
                 .likeCount(reel.getLikeCount() != null ? reel.getLikeCount() : 0)
                 .viewCount(reel.getViewCount() != null ? reel.getViewCount() : 0)
+                .likedUserIds(finalLikedUsers)
+                .viewedUserIds(finalViewedUsers)
                 .commentCount(commentCount)
                 .status(reel.getStatus())
                 .createdAt(reel.getCreatedAt())
+                .productName(product != null ? product.getName() : null)
                 .product(product)
                 .build();
     }

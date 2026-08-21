@@ -11,6 +11,7 @@ import { useState, useEffect } from 'react';
 import { fetchAddressById } from '@/features/crm/crmService';
 import { toast } from 'sonner';
 import type { OrderStatus } from './types';
+import { formatOrderNumber } from '@/utils/formatters';
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; icon: React.ReactNode; color: string; step: number }> = {
   PENDING: { label: 'Bekliyor', icon: <Clock className="h-5 w-5" />, color: 'text-amber-500 bg-amber-500/10 border-amber-500/20', step: 1 },
@@ -92,7 +93,9 @@ export function OrderDetailPage() {
           <CheckCircle2 className="h-6 w-6 text-emerald-500" />
           <div>
             <h3 className="font-bold text-emerald-500">Siparişiniz Başarıyla Alındı!</h3>
-            <p className="text-sm text-emerald-500/80">Sipariş numaranız: {order?.id || order?.orderNumber || id}</p>
+            <p className="text-sm text-emerald-500/80" title={order?.id || id}>
+              Sipariş numaranız: {order?.orderCode || order?.orderNumber || formatOrderNumber(order?.id || id)}
+            </p>
           </div>
         </div>
       )}
@@ -105,7 +108,9 @@ export function OrderDetailPage() {
           </Button>
           <div>
             <h1 className="text-xl font-bold">Sipariş Detayı</h1>
-            <p className="text-sm text-muted-foreground font-mono">#{order?.id || order?.orderNumber || id}</p>
+            <p className="text-sm text-muted-foreground font-mono" title={order?.id || id}>
+              {order?.orderCode || order?.orderNumber || formatOrderNumber(order?.id || id)}
+            </p>
           </div>
         </div>
         

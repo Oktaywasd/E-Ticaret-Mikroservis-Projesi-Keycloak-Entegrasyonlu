@@ -8,6 +8,7 @@ export interface CartItem {
   imageUrl?: string;
   quantity: number;
   variant?: string;
+  stock: number;
 }
 
 interface CartState {
@@ -31,14 +32,17 @@ export const useCartStore = create<CartState>()(
           );
           if (existing) {
             return {
-              items: state.items.map((i) =>
-                i.productId === newItem.productId && i.variant === newItem.variant
-                  ? { ...i, quantity: i.quantity + newItem.quantity }
-                  : i
-              ),
+              items: state.items.map((i) => {
+                if (i.productId === newItem.productId && i.variant === newItem.variant) {
+                  const newQuantity = Math.min(i.quantity + newItem.quantity, newItem.stock);
+                  return { ...i, quantity: newQuantity, stock: newItem.stock };
+                }
+                return i;
+              }),
             };
           }
-          return { items: [...state.items, newItem] };
+          const qty = Math.min(newItem.quantity, newItem.stock);
+          return { items: [...state.items, { ...newItem, quantity: qty }] };
         });
       },
 
@@ -56,9 +60,13 @@ export const useCartStore = create<CartState>()(
           return;
         }
         set((state) => ({
-          items: state.items.map((i) =>
-            i.productId === productId && i.variant === variant ? { ...i, quantity } : i
-          ),
+          items: state.items.map((i) => {
+            if (i.productId === productId && i.variant === variant) {
+              const clampedQuantity = Math.min(quantity, i.stock ?? quantity);
+              return { ...i, quantity: clampedQuantity };
+            }
+            return i;
+          })
         }));
       },
 

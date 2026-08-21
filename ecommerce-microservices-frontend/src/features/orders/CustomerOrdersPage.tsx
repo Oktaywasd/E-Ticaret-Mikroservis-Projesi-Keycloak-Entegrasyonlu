@@ -8,6 +8,7 @@ import { ErrorMessage } from '@/components/ui/error-message';
 import { Pagination } from '@/components/ui/pagination';
 import { useMyOrders } from './useOrderQueries';
 import type { OrderStatus } from './types';
+import { formatOrderNumber } from '@/utils/formatters';
 
 const PAGE_SIZE = 10;
 
@@ -63,6 +64,12 @@ export function CustomerOrdersPage() {
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-muted/20 border-b border-border/50">
                   <div className="grid grid-cols-2 sm:flex gap-x-8 gap-y-2 text-sm">
+                    <div>
+                      <p className="text-muted-foreground mb-0.5">Sipariş No</p>
+                      <p className="font-medium font-mono text-xs mt-1">
+                        {order?.orderCode || order?.orderNumber || formatOrderNumber(order?.id)}
+                      </p>
+                    </div>
                     <div>
                       <p className="text-muted-foreground mb-0.5">Sipariş Tarihi</p>
                       <p className="font-medium">

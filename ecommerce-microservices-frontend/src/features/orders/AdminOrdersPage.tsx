@@ -21,6 +21,8 @@ const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; colo
   CANCELLED: { label: 'İptal Edildi', icon: <XCircle className="h-4 w-4" />, color: 'text-destructive bg-destructive/10' },
 };
 
+import { formatOrderNumber } from '@/utils/formatters';
+
 export function AdminOrdersPage() {
   const [page, setPage] = useState(0);
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -143,7 +145,7 @@ export function AdminOrdersPage() {
                     const addressText = order.deliveryAddress?.addressLine || order.addressLine || (order.addressId ? `Adres ID: ${order.addressId}` : "Adres bilgisi girilmedi");
                     const cityInfo = order.deliveryAddress?.city ? `${order.deliveryAddress.city}, ${order.deliveryAddress.district || ''}` : (order.shippingAddress?.city ? `${order.shippingAddress.city}, ${order.shippingAddress.district || ''}` : "-");
                     
-                    const orderNumber = order?.orderNumber || order?.id || "-";
+                    const orderNumber = order?.orderCode || order?.orderNumber || formatOrderNumber(order?.id);
                     const orderDate = order.createdAt || order.orderDate ? formatDate(order.createdAt || order.orderDate) : "-";
                     
                     const cfg = STATUS_CONFIG[status as OrderStatus] || STATUS_CONFIG['PENDING'];
@@ -152,8 +154,8 @@ export function AdminOrdersPage() {
                     return (
                       <React.Fragment key={order.id || Math.random()}>
                         <tr className="border-b border-border/30 hover:bg-muted/10 transition-colors group">
-                          <td className="px-4 py-3 font-mono text-xs">{orderNumber}</td>
-                        <td className="px-4 py-3">{orderDate}</td>
+                          <td className="px-4 py-3 font-mono text-xs font-bold" title={order.id}>{orderNumber}</td>
+                          <td className="px-4 py-3">{orderDate}</td>
                           <td className="px-4 py-3 hidden sm:table-cell truncate max-w-[150px]">
                             {customerText}
                           </td>

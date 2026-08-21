@@ -83,6 +83,16 @@ public class ProductController {
         return ResponseEntity.ok().build();
     }
 
+    @PutMapping("/{id}/restore-stock")
+    @Operation(summary = "Ürün Stok İade Et", description = "Sipariş iptali sonrasında ürün stoğunu belirtilen miktar kadar artırır.")
+    public ResponseEntity<Void> restoreStock(
+            @PathVariable("id") String id,
+            @RequestParam(name = "quantity") Integer quantity
+    ) {
+        productService.restoreStock(id, quantity);
+        return ResponseEntity.ok().build();
+    }
+
     @DeleteMapping("/{id}")
     @Operation(summary = "Ürün Sil (Soft Delete)", description = "Ürünü veritabanından tamamen silmez, isDeleted alanını true yapar.")
     public ResponseEntity<Void> deleteProduct(@PathVariable("id") String id) {

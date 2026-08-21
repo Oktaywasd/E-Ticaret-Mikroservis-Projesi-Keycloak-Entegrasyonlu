@@ -90,6 +90,17 @@ public class OrderServiceImpl implements OrderService {
         return orderMapper.toOrderResponseDto(savedOrder);
     }
 
+    // Benzersiz ORD-XXXXXX üreten metod
+    private String generateUniqueOrderCode() {
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        String code;
+        do {
+            int number = 100000 + random.nextInt(900000); // 100000 - 999999
+            code = "ORD-" + number;
+        } while (orderRepository.existsByOrderCode(code));
+        return code;
+    }
+
     @Override
     public OrderResponseDto getOrderById(String orderId, String keycloakUserId, boolean isAdmin) {
         Order order = findOrderEntityById(orderId);
@@ -126,6 +137,7 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    @Transactional
     public OrderResponseDto cancelOrder(String orderId, String keycloakUserId, boolean isAdmin) {
         Order order = findOrderEntityById(orderId);
 
@@ -143,8 +155,20 @@ public class OrderServiceImpl implements OrderService {
 
         order.setStatus(OrderStatus.CANCELLED);
         Order cancelledOrder = orderRepository.save(order);
-        log.info("Order cancelled successfully with ID: {}", orderId);
 
+        // İptal edilen siparişteki tüm ürünlerin stoğunu Catalog servisine iade et
+        if (cancelledOrder.getItems() != null) {
+            for (OrderItem item : cancelledOrder.getItems()) {
+                try {
+                    productCatalogClient.restoreStock(item.getProductId(), item.getQuantity());
+                    log.info("Stock restored for product: {} with quantity: {}", item.getProductId(), item.getQuantity());
+                } catch (Exception e) {
+                    log.error("Failed to restore stock for product ID: {} in order: {}", item.getProductId(), orderId, e);
+                }
+            }
+        }
+
+        log.info("Order cancelled successfully with ID: {}", orderId);
         return orderMapper.toOrderResponseDto(cancelledOrder);
     }
 //mavi tik için eklendi

@@ -14,6 +14,7 @@ import type { ProductVariant } from './types';
 export function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data: product, isLoading, isError, error, refetch } = useProduct(id!);
+  const items = useCartStore((s) => s.items);
   const addItem = useCartStore((s) => s.addItem);
 
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
@@ -23,11 +24,14 @@ export function ProductDetailPage() {
   if (isLoading) return <ProductDetailSkeleton />;
   if (isError || !product) return <ErrorMessage error={error} onRetry={refetch} />;
 
-  const hasDiscount = product.price.discountedPrice < product.price.sellingPrice;
-  const basePrice = product.price.discountedPrice;
+  const basePrice = product.price.sellingPrice;
   const effectivePrice = basePrice + (selectedVariant?.additionalPrice ?? 0);
   const effectiveStock = selectedVariant?.stock ?? product.stock.currentStock;
   const allImages = [product.imageUrl, ...(product.images ?? [])].filter(Boolean) as string[];
+
+  const variantString = selectedVariant ? `${selectedVariant.name}: ${selectedVariant.value}` : undefined;
+  const currentInCart = items.find(i => i.productId === product?.id && i.variant === variantString)?.quantity ?? 0;
+  const remainingStock = effectiveStock - currentInCart;
 
   const formatPrice = (val: number) =>
     new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(val);
@@ -39,7 +43,8 @@ export function ProductDetailPage() {
       price: effectivePrice,
       imageUrl: product.imageUrl,
       quantity,
-      variant: selectedVariant ? `${selectedVariant.name}: ${selectedVariant.value}` : undefined,
+      variant: variantString,
+      stock: effectiveStock,
     });
   };
 
@@ -109,10 +114,7 @@ export function ProductDetailPage() {
           <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="secondary">{product.category?.name}</Badge>
             {product.brand && <Badge variant="outline">{product.brand}</Badge>}
-            {!product.active && <Badge variant="destructive">Pasif</Badge>}
-            {hasDiscount && (
-              <Badge className="bg-emerald-500 text-white">İndirim</Badge>
-            )}
+            {!product.active && product.stock.currentStock === 0 && <Badge variant="destructive">Pasif</Badge>}
           </div>
 
           {/* Name */}
@@ -133,11 +135,6 @@ export function ProductDetailPage() {
 
           {/* Price */}
           <div className="py-4 border-y border-border/50 flex flex-col gap-1">
-            {hasDiscount && (
-              <span className="text-lg text-muted-foreground line-through">
-                {formatPrice(product.price.sellingPrice)}
-              </span>
-            )}
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-bold text-violet-400">
                 {formatPrice(effectivePrice)}
@@ -209,7 +206,7 @@ export function ProductDetailPage() {
                 size="icon"
                 className="h-10 w-10 rounded-none border-r border-border/50"
                 onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                disabled={quantity <= 1}
+                disabled={quantity <= 1 || remainingStock <= 0}
                 aria-label="Azalt"
               >
                 <Minus className="h-4 w-4" />
@@ -219,8 +216,8 @@ export function ProductDetailPage() {
                 variant="ghost"
                 size="icon"
                 className="h-10 w-10 rounded-none border-l border-border/50"
-                onClick={() => setQuantity((q) => Math.min(effectiveStock, q + 1))}
-                disabled={quantity >= effectiveStock}
+                onClick={() => setQuantity((q) => Math.min(remainingStock, q + 1))}
+                disabled={quantity >= remainingStock || remainingStock <= 0}
                 aria-label="Artır"
               >
                 <Plus className="h-4 w-4" />
@@ -230,11 +227,11 @@ export function ProductDetailPage() {
             <Button
               id="add-to-cart-detail"
               className="flex-1 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-lg shadow-violet-500/20"
-              disabled={effectiveStock === 0}
+              disabled={remainingStock <= 0 || effectiveStock === 0}
               onClick={handleAddToCart}
             >
               <ShoppingCart className="h-4 w-4 mr-2" />
-              {effectiveStock === 0 ? 'Stokta Yok' : 'Sepete Ekle'}
+              {effectiveStock === 0 ? 'Stokta Yok' : remainingStock <= 0 ? 'Tüm stok sepetinizde' : 'Sepete Ekle'}
             </Button>
           </div>
 

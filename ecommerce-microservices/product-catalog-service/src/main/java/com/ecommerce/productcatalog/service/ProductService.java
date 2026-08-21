@@ -114,6 +114,34 @@ public class ProductService {
         log.info("Stock reduced successfully for product {}. Quantity: {}, New Stock: {}", id, quantity, newStock);
     }
 
+    // 6.1 YENİ EKLENEN İŞ MANTIĞI: Sipariş İptalinde Stok İade Etme (GÜVENLİ VE LOGLU)
+    @Transactional
+    public void restoreStock(String id, Integer quantity) {
+        log.info("Attempting to restore stock for product ID: {} by quantity: {}", id, quantity);
+
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Stok iade edilecek ürün bulunamadı ID: " + id));
+
+        if (Boolean.TRUE.equals(product.getIsDeleted())) {
+            throw new AlreadyExistsException("Silinmiş ürünün stoğu artırılamaz ID: " + id);
+        }
+
+        if (product.getStock() == null) {
+            log.error("Stock object is null for product ID: {}", id);
+            throw new ResourceNotFoundException("Ürünün stok yapısı bulunamadı ID: " + id);
+        }
+
+        Integer currentStock = product.getStock().getCurrentStock();
+        int safeCurrentStock = (currentStock != null) ? currentStock : 0;
+        int newStock = safeCurrentStock + quantity;
+
+        product.getStock().setCurrentStock(newStock);
+        product.setUpdatedDate(LocalDateTime.now());
+
+        productRepository.save(product);
+        log.info("Stock restored successfully for product {}. Added: {}, New Stock: {}", id, quantity, newStock);
+    }
+
     // 7. Ürün Silme (Soft Delete)
     public void deleteProduct(String id) {
         Product product = findActiveProductById(id);

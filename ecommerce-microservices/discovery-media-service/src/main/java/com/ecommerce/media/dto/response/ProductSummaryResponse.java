@@ -11,6 +11,6 @@ public class ProductSummaryResponse {
     private String id;
     private String name;
     private String productCode;
-    private BigDecimal price;
+    private Object price;
     private String thumbnailUrl;
 }

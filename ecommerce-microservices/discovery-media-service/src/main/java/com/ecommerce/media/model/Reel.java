@@ -40,6 +40,9 @@ public class Reel {
     private Set<String> likedUserIds = new HashSet<>();
 
     @Builder.Default
+    private Set<String> viewedUserIds = new HashSet<>();
+
+    @Builder.Default
     private String status = "ACTIVE";
 
     @Builder.Default

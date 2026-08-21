@@ -8,8 +8,11 @@ import org.springframework.web.bind.annotation.*;
 public interface ProductCatalogClient {
 
     @GetMapping("/api/v1/products/{id}")
-    ProductResponseDto getProductById(@PathVariable("id") String id);
+    ProductResponseDto getProductById(@PathVariable(name = "id") String id);
 
     @PutMapping("/api/v1/products/{id}/reduce-stock")
-    void reduceStock(@PathVariable("id") String id, @RequestParam("quantity") Integer quantity);
+    void reduceStock(@PathVariable(name = "id") String id, @RequestParam(name = "quantity") Integer quantity);
+
+    @PutMapping("/api/v1/products/{id}/restore-stock")
+    void restoreStock(@PathVariable(name = "id") String id, @RequestParam(name = "quantity") Integer quantity);
 }

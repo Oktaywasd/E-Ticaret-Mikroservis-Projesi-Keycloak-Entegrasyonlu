@@ -69,15 +69,20 @@ public class ReelController {
 
     @PostMapping("/{id}/view")
     @Operation(summary = "Increment video view count atomically (Public)")
-    public ResponseEntity<Void> incrementView(@PathVariable String id) {
-        reelService.incrementViewCount(id);
+    public ResponseEntity<Void> incrementView(
+            @PathVariable String id,
+            @AuthenticationPrincipal Jwt jwt) {
+        String userId = (jwt != null) ? jwt.getSubject() : null;
+        reelService.incrementViewCount(id, userId);
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/{id}/like")
     @SecurityRequirement(name = "bearerAuth")
     @Operation(summary = "Like a reel video (Customer)")
-    public ResponseEntity<Void> likeReel(@PathVariable String id, @AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<Void> likeReel(
+            @PathVariable String id,
+            @AuthenticationPrincipal Jwt jwt) {
         String userId = (jwt != null) ? jwt.getSubject() : "anonymous-user";
         reelService.toggleLikeReel(id, userId);
         return ResponseEntity.ok().build();
@@ -98,8 +103,8 @@ public class ReelController {
             @AuthenticationPrincipal Jwt jwt) {
 
         String userId = (jwt != null) ? jwt.getSubject() : "anonymous-user";
-        String username = (jwt != null) ? jwt.getClaimAsString("preferred_username") : "Anonymous";
-        return new ResponseEntity<>(reelService.addComment(reelId, request, userId, username), HttpStatus.CREATED);
+        String fullName = extractFullName(jwt);
+        return new ResponseEntity<>(reelService.addComment(reelId, request, userId, fullName), HttpStatus.CREATED);
     }
 
     @PostMapping("/comments/{id}/pin")
@@ -118,6 +123,25 @@ public class ReelController {
         String userId = (jwt != null) ? jwt.getSubject() : "anonymous-user";
         reelService.deleteReel(id, userId, hasAdminRole(jwt));
         return ResponseEntity.noContent().build();
+    }
+
+    private String extractFullName(Jwt jwt) {
+        if (jwt == null) {
+            return "Anonim Kullanıcı";
+        }
+        String name = jwt.getClaimAsString("name");
+        if (name != null && !name.isBlank()) {
+            return name;
+        }
+
+        String givenName = jwt.getClaimAsString("given_name");
+        String familyName = jwt.getClaimAsString("family_name");
+        if ((givenName != null && !givenName.isBlank()) || (familyName != null && !familyName.isBlank())) {
+            return String.format("%s %s", givenName != null ? givenName : "", familyName != null ? familyName : "").trim();
+        }
+
+        String username = jwt.getClaimAsString("preferred_username");
+        return (username != null && !username.isBlank()) ? username : "Kullanıcı";
     }
 
     @SuppressWarnings("unchecked")

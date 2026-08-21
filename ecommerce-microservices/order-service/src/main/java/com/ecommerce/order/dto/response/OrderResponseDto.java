@@ -16,6 +16,7 @@ import java.util.List;
 @AllArgsConstructor
 public class OrderResponseDto {
     private String id;
+    private String orderCode;
     private String keycloakUserId;
     private String addressId;
     private List<OrderItemResponseDto> items;

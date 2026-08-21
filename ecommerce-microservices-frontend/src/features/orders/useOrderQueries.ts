@@ -55,6 +55,11 @@ export function useCancelMyOrder() {
     onSuccess: (data) => {
       qc.setQueryData(orderKeys.myOrderDetail(data.id), data);
       qc.invalidateQueries({ queryKey: orderKeys.myOrders() });
+      // Invalidate both catalog list and specific product details
+      qc.invalidateQueries({ queryKey: ['products'] });
+      data.items?.forEach(item => {
+        qc.invalidateQueries({ queryKey: ['products', 'detail', item.productId] });
+      });
     },
   });
 }
@@ -85,6 +90,11 @@ export function useUpdateOrderStatus() {
     onSuccess: (data) => {
       qc.setQueryData(orderKeys.adminOrderDetail(data.id), data);
       qc.invalidateQueries({ queryKey: orderKeys.adminOrders() });
+      // Invalidate both catalog list and specific product details
+      qc.invalidateQueries({ queryKey: ['products'] });
+      data.items?.forEach(item => {
+        qc.invalidateQueries({ queryKey: ['products', 'detail', item.productId] });
+      });
     },
   });
 }

@@ -60,6 +60,7 @@ export function CartPage() {
                   size="icon"
                   className="h-7 w-7"
                   onClick={() => updateQuantity(item.productId, item.quantity + 1, item.variant)}
+                  disabled={item.stock !== undefined && item.quantity >= item.stock}
                 >
                   <Plus className="h-3 w-3" />
                 </Button>

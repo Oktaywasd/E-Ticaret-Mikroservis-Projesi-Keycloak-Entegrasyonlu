@@ -12,21 +12,21 @@ interface ProductCardProps {
 export function ProductCard({ product }: ProductCardProps) {
   const addItem = useCartStore((s) => s.addItem);
 
+  const isOutOfStock = product.stock.currentStock === 0;
+  const isLowStock = product.stock.currentStock > 0 && product.stock.currentStock <= 5;
+
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     addItem({
       productId: product.id,
       name: product.name,
-      price: product.price.discountedPrice,
+      price: product.price.sellingPrice,
       imageUrl: product.imageUrl,
       quantity: 1,
+      stock: product.stock.currentStock,
     });
   };
-
-  const isOutOfStock = product.stock.currentStock === 0;
-  const isLowStock = product.stock.currentStock > 0 && product.stock.currentStock <= 5;
-  const hasDiscount = product.price.discountedPrice < product.price.sellingPrice;
 
   const formatPrice = (val: number) =>
     new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(val);
@@ -59,9 +59,6 @@ export function ProductCard({ product }: ProductCardProps) {
           )}
           {isLowStock && !isOutOfStock && (
             <Badge variant="warning" className="text-[10px]">Son {product.stock.currentStock} adet</Badge>
-          )}
-          {hasDiscount && (
-            <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white text-[10px]">İndirim</Badge>
           )}
         </div>
 
@@ -102,20 +99,9 @@ export function ProductCard({ product }: ProductCardProps) {
         
         {/* Price */}
         <div className="mt-auto flex flex-col gap-0.5">
-          {hasDiscount ? (
-            <>
-              <span className="text-xs text-muted-foreground line-through">
-                {formatPrice(product.price.sellingPrice)}
-              </span>
-              <span className="font-bold text-lg text-violet-700 whitespace-nowrap">
-                {formatPrice(product.price.discountedPrice)}
-              </span>
-            </>
-          ) : (
-            <span className="font-bold text-lg text-violet-700 whitespace-nowrap">
-              {formatPrice(product.price.sellingPrice)}
-            </span>
-          )}
+          <span className="font-bold text-lg text-violet-700 whitespace-nowrap">
+            {formatPrice(product.price.sellingPrice)}
+          </span>
         </div>
 
         {/* Rating */}

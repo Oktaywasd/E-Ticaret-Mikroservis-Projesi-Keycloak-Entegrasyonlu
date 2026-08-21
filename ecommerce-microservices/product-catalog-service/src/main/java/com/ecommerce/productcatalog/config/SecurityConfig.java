@@ -40,8 +40,8 @@ public class SecurityConfig {
                         // 2. GET İstekleri (Ürün/Kategori Listeleme) Herkese Açık
                         .requestMatchers(HttpMethod.GET, "/api/v1/products/**", "/api/v1/categories/**").permitAll()
 
-                        // 3. Stok Düşürme (reduce-stock) - Sipariş sırasında Müşteri (CUSTOMER) rolü de çağırabilsin
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/products/*/reduce-stock").hasAnyRole("ADMIN", "SELLER", "CUSTOMER")
+                        // 3. Stok İşlemleri (Stok Düşürme & Stok İade Etme) -> Müşteri (CUSTOMER), Satıcı ve Admin çağırabilsin
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/products/*/reduce-stock", "/api/v1/products/*/restore-stock").hasAnyRole("ADMIN", "SELLER", "CUSTOMER")
 
                         // 4. Genel Ürün / Kategori Ekleme ve Güncelleme -> ADMIN veya SELLER
                         .requestMatchers(HttpMethod.POST, "/api/v1/products/**", "/api/v1/categories/**").hasAnyRole("ADMIN", "SELLER")
