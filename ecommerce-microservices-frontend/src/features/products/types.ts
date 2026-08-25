@@ -35,11 +35,24 @@ export interface Product {
   brand?: string;
   imageUrl?: string;
   images?: string[];
+  imageUrls?: string[];
+  ratingAverage?: number;
+  reviewCount?: number;
   variants?: ProductVariant[];
-  active: boolean;
+  isActive: boolean;
+  active?: boolean; // fallback
   deleted?: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+// ─── Product Suggestion ───────────────────────────────────────────────────────
+export interface ProductSuggestion {
+  id: string;
+  name: string;
+  brand: string;
+  price: number;
+  imageUrl?: string;
 }
 
 // ─── Request DTOs ─────────────────────────────────────────────────────────────
@@ -51,7 +64,6 @@ export interface CreateProductRequest {
   stock: number;
   categoryId: string;
   brand?: string;
-  imageUrl?: string;
   variants?: ProductVariant[];
 }
 
@@ -71,11 +83,14 @@ export interface CreateCategoryRequest {
 export interface ProductQueryParams {
   page?: number;
   size?: number;
-  sort?: string;
-  name?: string;
+  search?: string;
   categoryId?: string;
   brand?: string;
   minPrice?: number;
   maxPrice?: number;
+  sortBy?: string;
+  sortDirection?: string;
+  sort?: string;
   includeDeleted?: boolean;
+  includeInactive?: boolean;
 }

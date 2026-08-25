@@ -1,10 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,6 +17,7 @@ import {
   useCreateProduct,
   useUpdateProduct,
 } from './useProductQueries';
+import { uploadProductImages } from './productService';
 
 // ─── Validation Schema ────────────────────────────────────────────────────────
 const productSchema = z.object({
@@ -36,7 +37,6 @@ const productSchema = z.object({
     .min(0, 'Stok 0 veya üzeri olmalı'),
   categoryId: z.string().min(1, 'Kategori seçiniz'),
   brand: z.string().max(100, 'Maks 100 karakter').optional(),
-  imageUrl: z.string().url('Geçerli bir URL giriniz').optional().or(z.literal('')),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -67,9 +67,28 @@ export function ProductFormPage() {
       stock: 0,
       categoryId: '',
       brand: '',
-      imageUrl: '',
     },
   });
+
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const filesArray = Array.from(e.target.files);
+      setSelectedFiles(prev => [...prev, ...filesArray]);
+      const newPreviews = filesArray.map(f => URL.createObjectURL(f));
+      setPreviewUrls(prev => [...prev, ...newPreviews]);
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    setPreviewUrls(prev => {
+      URL.revokeObjectURL(prev[index]);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
 
   // Pre-fill form when editing
   useEffect(() => {
@@ -86,7 +105,6 @@ export function ProductFormPage() {
           ? (existing?.stock?.currentStock || existing?.stock?.quantity || 0) 
           : Number(existing?.stock || existing?.stockQuantity || 0),
         categoryId: existing?.categoryId || existing?.category?.id || "",
-        imageUrl: existing?.imageUrl || "",
       });
     }
   }, [existing, reset]);
@@ -100,12 +118,21 @@ export function ProductFormPage() {
         brand: values.brand,
         price: Number(values.price),
         stock: typeof values.stock === 'object' ? Number((values.stock as any).quantity) : Number(values.stock),
-        categoryId: values.categoryId,
-        imageUrl: values.imageUrl
+        categoryId: values.categoryId
       };
 
       updateMutation.mutate(patchPayload as any, {
-        onSuccess: () => navigate('/admin/products'),
+        onSuccess: async (data) => {
+          if (selectedFiles.length > 0) {
+            try {
+              await uploadProductImages(id!, selectedFiles);
+              toast.success('Görseller yüklendi');
+            } catch (err) {
+              toast.error('Görseller yüklenirken hata oluştu');
+            }
+          }
+          navigate('/admin/products');
+        },
         onError: (error: any) => {
           console.error("Backend Validation Error:", error?.response?.data);
           const msg = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Ürün güncellenirken bir hata oluştu';
@@ -120,14 +147,22 @@ export function ProductFormPage() {
         brand: String(values.brand || ""),
         price: Number(values.price),
         stock: Number(values.stock),
-        categoryId: String(values.categoryId),
-        imageUrl: String(values.imageUrl || "")
+        categoryId: String(values.categoryId)
       };
 
-      console.log("Gönderilen Payload:", createPayload);
-
       createMutation.mutate(createPayload as any, {
-        onSuccess: () => navigate('/admin/products'),
+        onSuccess: async (data) => {
+          if (selectedFiles.length > 0) {
+            try {
+              // 'data' returned from createMutation is the created Product
+              await uploadProductImages(data.id, selectedFiles);
+              toast.success('Görseller yüklendi');
+            } catch (err) {
+              toast.error('Görseller yüklenirken hata oluştu');
+            }
+          }
+          navigate('/admin/products');
+        },
         onError: (error: any) => {
           console.error("Backend Validation Error:", error?.response?.data);
           const msg = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Ürün eklenirken bir hata oluştu';
@@ -291,17 +326,36 @@ export function ProductFormPage() {
           )}
         </div>
 
-        {/* Image URL */}
-        <div className="space-y-1.5">
-          <Label htmlFor="imageUrl">Görsel URL</Label>
+        {/* Multi-Image Upload */}
+        <div className="space-y-3 p-4 border border-dashed border-border/50 rounded-xl bg-muted/10">
+          <div className="space-y-1">
+            <Label htmlFor="images">Çoklu Görsel Yükle</Label>
+            <p className="text-xs text-muted-foreground">Ürün detay sayfası için birden fazla görsel seçebilirsiniz.</p>
+          </div>
           <Input
-            id="imageUrl"
-            type="url"
-            placeholder="https://example.com/image.jpg"
-            {...register('imageUrl')}
+            id="images"
+            type="file"
+            multiple
+            accept="image/*"
+            onChange={handleFileChange}
+            className="cursor-pointer file:cursor-pointer"
           />
-          {errors.imageUrl && (
-            <p className="text-xs text-destructive">{errors.imageUrl.message}</p>
+          
+          {previewUrls.length > 0 && (
+            <div className="flex flex-wrap gap-2 pt-2">
+              {previewUrls.map((url, i) => (
+                <div key={i} className="relative h-20 w-20 rounded-md overflow-hidden border">
+                  <img src={url} alt="Preview" className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeFile(i)}
+                    className="absolute top-1 right-1 h-5 w-5 bg-black/60 rounded-full flex items-center justify-center text-white hover:bg-black"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 

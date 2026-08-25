@@ -8,7 +8,7 @@ import { Pagination } from '@/components/ui/pagination';
 import { ProductCard } from './ProductCard';
 import { ProductCardSkeleton } from '@/components/ui/skeleton';
 import { ErrorMessage } from '@/components/ui/error-message';
-import { useProducts, useProductsByCategory, useCategories } from './useProductQueries';
+import { useProducts, useCategories } from './useProductQueries';
 import type { ProductQueryParams } from './types';
 import { Package } from 'lucide-react';
 
@@ -33,7 +33,7 @@ export function ProductsPage() {
   const [filters, setFilters] = useState<ProductQueryParams>({
     page: Number(searchParams.get('page') ?? 0),
     size: PAGE_SIZE,
-    name: searchParams.get('search') ?? undefined,
+    search: searchParams.get('search') ?? undefined,
     categoryId: searchParams.get('categoryId') ?? undefined,
     brand: searchParams.get('brand') ?? undefined,
     sort: searchParams.get('sort') ?? undefined,
@@ -43,20 +43,15 @@ export function ProductsPage() {
 
   const [draftFilters, setDraftFilters] = useState<ProductQueryParams>(filters);
 
-  // Fetch data only by category (fetch all matching category, no other filters)
-  const allProductsQuery = useProducts({ size: 1000 });
-  const categoryProductsQuery = useProductsByCategory(filters.categoryId || '', { size: 1000 });
-
-  const activeQuery = filters.categoryId ? categoryProductsQuery : allProductsQuery;
-  const { data, isLoading, isError, error, refetch } = activeQuery;
+  const { data, isLoading, isError, error, refetch } = useProducts(filters);
   
   const { data: categories } = useCategories();
 
-  // Keep URL in sync with active filters
+  // Keep URL in sync with active filters (and vice versa for external search)
   useEffect(() => {
     const params: Record<string, string> = {};
     if (filters.page) params.page = String(filters.page);
-    if (filters.name) params.search = filters.name;
+    if (filters.search) params.search = filters.search;
     if (filters.categoryId) params.categoryId = filters.categoryId;
     if (filters.brand) params.brand = filters.brand;
     if (filters.sort) params.sort = filters.sort;
@@ -64,6 +59,15 @@ export function ProductsPage() {
     if (filters.maxPrice) params.maxPrice = String(filters.maxPrice);
     setSearchParams(params, { replace: true });
   }, [filters, setSearchParams]);
+
+  // Sync external search changes (e.g. from Header)
+  useEffect(() => {
+    const urlSearch = searchParams.get('search') || undefined;
+    if (urlSearch !== filters.search) {
+      setFilters(prev => ({ ...prev, search: urlSearch, page: 0 }));
+      setDraftFilters(prev => ({ ...prev, search: urlSearch, page: 0 }));
+    }
+  }, [searchParams.get('search')]);
 
   const updateDraftFilter = (updates: Partial<ProductQueryParams>) => {
     setDraftFilters((prev) => ({ ...prev, ...updates }));
@@ -80,90 +84,22 @@ export function ProductsPage() {
   };
 
   const clearFilters = () => {
-    const reset = { page: 0, size: PAGE_SIZE };
+    const reset = { 
+      page: 0, 
+      size: PAGE_SIZE,
+      categoryId: filters.categoryId,
+    };
     setDraftFilters(reset);
     setFilters(reset);
   };
 
-  // ─── Client-Side Filtering & Sorting ────────────────────────
-  const filteredProducts = useMemo(() => {
-    if (!data?.content) return [];
-    let result = [...data.content];
+  // Pagination & Data (Server-Side)
+  const totalElements = data?.totalElements || 0;
+  const totalPages = data?.totalPages || 0;
+  const currentPage = data?.number || 0;
+  const currentProducts = data?.content || [];
 
-    // 1. Search (name or description, case-insensitive)
-    if (filters.name) {
-      const q = filters.name.toLowerCase();
-      result = result.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          (p.description && p.description.toLowerCase().includes(q))
-      );
-    }
-
-    // 2. Brand
-    if (filters.brand) {
-      const b = filters.brand.toLowerCase();
-      result = result.filter((p) => p.brand && p.brand.toLowerCase().includes(b));
-    }
-
-    // 3. Price Range (discountedPrice if exists, else sellingPrice)
-    if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
-      result = result.filter((p) => {
-        const pPrice = p.price?.discountedPrice ?? p.price?.sellingPrice ?? 0;
-        if (filters.minPrice !== undefined && pPrice < filters.minPrice) return false;
-        if (filters.maxPrice !== undefined && pPrice > filters.maxPrice) return false;
-        return true;
-      });
-    }
-
-    // 4. Sorting
-    if (filters.sort) {
-      result.sort((a, b) => {
-        switch (filters.sort) {
-          case 'createdAt,desc': {
-            const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-            const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-            return dateB - dateA;
-          }
-          case 'createdAt,asc': {
-            const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-            const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-            return dateA - dateB;
-          }
-          case 'price,asc': {
-            const priceA = a.price?.discountedPrice ?? a.price?.sellingPrice ?? 0;
-            const priceB = b.price?.discountedPrice ?? b.price?.sellingPrice ?? 0;
-            return priceA - priceB;
-          }
-          case 'price,desc': {
-            const priceA = a.price?.discountedPrice ?? a.price?.sellingPrice ?? 0;
-            const priceB = b.price?.discountedPrice ?? b.price?.sellingPrice ?? 0;
-            return priceB - priceA;
-          }
-          case 'name,asc':
-            return a.name.localeCompare(b.name);
-          case 'name,desc':
-            return b.name.localeCompare(a.name);
-          default:
-            return 0;
-        }
-      });
-    }
-
-    return result;
-  }, [data?.content, filters.name, filters.brand, filters.minPrice, filters.maxPrice, filters.sort]);
-
-  // Pagination (Local)
-  const totalElements = filteredProducts.length;
-  const totalPages = Math.ceil(totalElements / PAGE_SIZE);
-  const currentPage = filters.page ?? 0;
-  
-  const currentProducts = useMemo(() => {
-    const start = currentPage * PAGE_SIZE;
-    return filteredProducts.slice(start, start + PAGE_SIZE);
-  }, [filteredProducts, currentPage]);
-
-  const hasActiveFilters = !!(filters.name || filters.categoryId || filters.brand || filters.minPrice || filters.maxPrice);
+  const hasActiveFilters = !!(filters.search || filters.categoryId || filters.brand || filters.minPrice || filters.maxPrice);
 
   return (
     <div className="container mx-auto px-4 py-6">
@@ -241,9 +177,9 @@ export function ProductsPage() {
               <Input
                 id="products-search"
                 type="search"
-                placeholder="Ürün adı…"
-                value={draftFilters.name ?? ''}
-                onChange={(e) => updateDraftFilter({ name: e.target.value || undefined })}
+                placeholder="Ürün adı veya marka…"
+                value={draftFilters.search ?? ''}
+                onChange={(e) => updateDraftFilter({ search: e.target.value || undefined })}
                 className="pl-9"
               />
             </div>

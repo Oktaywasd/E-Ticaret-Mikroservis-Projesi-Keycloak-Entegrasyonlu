@@ -15,6 +15,13 @@ spring:
           issuer-uri: http://localhost:8080/realms/ecommerce-realm
           jwk-set-uri: http://localhost:8080/realms/ecommerce-realm/protocol/openid-connect/certs
 
+# --- MinIO Object Storage Entegrasyonu ---
+minio:
+  url: http://localhost:9000
+  access-key: minioadmin
+  secret-key: minioadminpassword
+  bucket-name: product-images
+
 springdoc:
   api-docs:
     path: /v3/api-docs

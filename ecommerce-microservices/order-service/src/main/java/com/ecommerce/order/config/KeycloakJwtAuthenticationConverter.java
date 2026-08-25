@@ -7,6 +7,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.stereotype.Component;
 
 import java.util.Collection;
 import java.util.List;
@@ -14,6 +15,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+@Component
 public class KeycloakJwtAuthenticationConverter implements Converter<Jwt, AbstractAuthenticationToken> {
 
     private final JwtGrantedAuthoritiesConverter defaultGrantedAuthoritiesConverter = new JwtGrantedAuthoritiesConverter();
@@ -31,12 +33,12 @@ public class KeycloakJwtAuthenticationConverter implements Converter<Jwt, Abstra
     @SuppressWarnings("unchecked")
     private Collection<GrantedAuthority> extractResourceRoles(Jwt jwt) {
         List<String> roles = new java.util.ArrayList<>();
-        
+
         Map<String, Object> realmAccess = jwt.getClaim("realm_access");
         if (realmAccess != null && realmAccess.containsKey("roles")) {
             roles.addAll((List<String>) realmAccess.get("roles"));
         }
-        
+
         List<String> rootRoles = jwt.getClaimAsStringList("roles");
         if (rootRoles != null) {
             roles.addAll(rootRoles);

@@ -1,8 +1,10 @@
 package com.ecommerce.productcatalog.service;
 
 import com.ecommerce.productcatalog.dto.request.ProductCreateRequest;
+import com.ecommerce.productcatalog.dto.request.ProductFilterRequest;
 import com.ecommerce.productcatalog.dto.request.ProductUpdateRequest;
 import com.ecommerce.productcatalog.dto.response.ProductResponse;
+import com.ecommerce.productcatalog.dto.response.ProductSearchSuggestionResponse;
 import com.ecommerce.productcatalog.exception.AlreadyExistsException;
 import com.ecommerce.productcatalog.exception.ResourceNotFoundException;
 import com.ecommerce.productcatalog.mapper.ProductMapper;
@@ -12,11 +14,22 @@ import com.ecommerce.productcatalog.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -26,6 +39,64 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final ProductMapper productMapper;
+    private final FileStorageService fileStorageService;
+    private final MongoTemplate mongoTemplate;
+
+    // 0. Dinamik Filtreleme ve Sayfalama (Server-Side)
+    public Page<ProductResponse> getFilteredProducts(ProductFilterRequest filter, Pageable pageable) {
+        Query query = new Query();
+
+        // 0.1. Silinmemiş Ürünler (Zorunlu)
+        query.addCriteria(Criteria.where("isDeleted").ne(true));
+
+        // 0.2. Aktiflik Durumu: Admin isteği değilse (includeInactive != true) sadece aktif ürünleri getir
+        if (!Boolean.TRUE.equals(filter.getIncludeInactive())) {
+            query.addCriteria(Criteria.where("isActive").ne(false));
+        }
+
+        // 0.3. Kategori Filtresi
+        if (filter.getCategoryId() != null && !filter.getCategoryId().isBlank()) {
+            query.addCriteria(Criteria.where("categoryId").is(filter.getCategoryId().trim()));
+        }
+
+        // 0.4. Marka Filtresi (Regex - Case Insensitive)
+        if (filter.getBrand() != null && !filter.getBrand().isBlank()) {
+            query.addCriteria(Criteria.where("brand").regex(filter.getBrand().trim(), "i"));
+        }
+
+        // 0.5. İsim veya Marka Arama
+        if (filter.getSearch() != null && !filter.getSearch().isBlank()) {
+            String searchRegex = filter.getSearch().trim();
+            query.addCriteria(new Criteria().orOperator(
+                    Criteria.where("name").regex(searchRegex, "i"),
+                    Criteria.where("brand").regex(searchRegex, "i")
+            ));
+        }
+
+        // 0.6. Fiyat Aralığı Filtresi (MongoDB sayısal eşleşmesi için doubleValue() kullanılır)
+        if (filter.getMinPrice() != null && filter.getMaxPrice() != null) {
+            query.addCriteria(Criteria.where("price.sellingPrice")
+                    .gte(filter.getMinPrice().doubleValue())
+                    .lte(filter.getMaxPrice().doubleValue()));
+        } else if (filter.getMinPrice() != null) {
+            query.addCriteria(Criteria.where("price.sellingPrice")
+                    .gte(filter.getMinPrice().doubleValue()));
+        } else if (filter.getMaxPrice() != null) {
+            query.addCriteria(Criteria.where("price.sellingPrice")
+                    .lte(filter.getMaxPrice().doubleValue()));
+        }
+
+        long total = mongoTemplate.count(query, Product.class);
+
+        query.with(pageable);
+        List<Product> products = mongoTemplate.find(query, Product.class);
+
+        List<ProductResponse> responses = products.stream()
+                .map(productMapper::toResponse)
+                .collect(Collectors.toList());
+
+        return new PageImpl<>(responses, pageable, total);
+    }
 
     // 1. Ürün Oluşturma
     public ProductResponse createProduct(ProductCreateRequest request) {
@@ -39,6 +110,7 @@ public class ProductService {
 
         Product product = productMapper.toEntity(request);
         product.setIsDeleted(false);
+        product.setIsActive(true);
         product.setCreatedDate(LocalDateTime.now());
         product.setUpdatedDate(LocalDateTime.now());
 
@@ -52,7 +124,7 @@ public class ProductService {
         return productMapper.toResponse(product);
     }
 
-    // 3. Tüm Ürünleri Sayfalamalı Listeleme
+    // 3. Tüm Ürünleri Sayfalamalı Listeleme (Admin ve genel kullanım)
     public Page<ProductResponse> getAllProducts(Pageable pageable) {
         Page<Product> products = productRepository.findAllByIsDeletedFalse(pageable);
         return products.map(productMapper::toResponse);
@@ -82,12 +154,11 @@ public class ProductService {
         return productMapper.toResponse(savedProduct);
     }
 
-    // 6. YENİ EKLENEN İŞ MANTIĞI: Stok Düşürme (GÜVENLİ VE LOGLU HALE GETİRİLDİ)
+    // 6. Stok Düşürme (GÜVENLİ VE LOGLU HALE GETİRİLDİ)
     @Transactional
     public void reduceStock(String id, Integer quantity) {
         log.info("Attempting to reduce stock for product ID: {} by quantity: {}", id, quantity);
 
-        // Standart findById ile de fallback yaparak urunu kesin buluyoruz
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Stok düşülecek ürün bulunamadı ID: " + id));
 
@@ -114,7 +185,7 @@ public class ProductService {
         log.info("Stock reduced successfully for product {}. Quantity: {}, New Stock: {}", id, quantity, newStock);
     }
 
-    // 6.1 YENİ EKLENEN İŞ MANTIĞI: Sipariş İptalinde Stok İade Etme (GÜVENLİ VE LOGLU)
+    // 6.1 Sipariş İptalinde Stok İade Etme (GÜVENLİ VE LOGLU)
     @Transactional
     public void restoreStock(String id, Integer quantity) {
         log.info("Attempting to restore stock for product ID: {} by quantity: {}", id, quantity);
@@ -149,6 +220,65 @@ public class ProductService {
         product.setIsDeleted(true);
         product.setUpdatedDate(LocalDateTime.now());
         productRepository.save(product);
+    }
+
+    // 8. Görsel Ekleme
+    public ProductResponse addImagesToProduct(String productId, List<MultipartFile> files) {
+        Product product = findActiveProductById(productId);
+
+        if (product.getImageUrls() == null) {
+            product.setImageUrls(new ArrayList<>());
+        }
+
+        for (MultipartFile file : files) {
+            if (file != null && !file.isEmpty()) {
+                String imageUrl = fileStorageService.uploadImage(file);
+                product.getImageUrls().add(imageUrl);
+            }
+        }
+
+        Product updatedProduct = productRepository.save(product);
+        return productMapper.toResponse(updatedProduct);
+    }
+
+    // 9. Anlık Arama Önerileri (Autocomplete)
+    public List<ProductSearchSuggestionResponse> getSearchSuggestions(String query, int limit) {
+        if (query == null || query.trim().length() < 2) {
+            return Collections.emptyList();
+        }
+
+        PageRequest pageRequest = PageRequest.of(0, Math.min(limit, 10));
+        List<Product> products = productRepository
+                .findByNameContainingIgnoreCaseOrBrandContainingIgnoreCaseAndIsDeletedFalse(query.trim(), query.trim(), pageRequest);
+
+        return products.stream()
+                .filter(p -> p.getIsActive() == null || p.getIsActive())
+                .map(p -> {
+                    BigDecimal price = (p.getPrice() != null) ? p.getPrice().getSellingPrice() : null;
+                    String firstImage = (p.getImageUrls() != null && !p.getImageUrls().isEmpty()) ? p.getImageUrls().get(0) : null;
+
+                    return ProductSearchSuggestionResponse.builder()
+                            .id(p.getId())
+                            .name(p.getName())
+                            .brand(p.getBrand())
+                            .price(price)
+                            .imageUrl(firstImage)
+                            .build();
+                })
+                .collect(Collectors.toList());
+    }
+
+    // 10. Admin Ürün Aktif/Pasif Durum Değiştirme (Toggle Status)
+    public ProductResponse toggleProductStatus(String id) {
+        Product product = findActiveProductById(id);
+
+        boolean currentStatus = product.getIsActive() == null || product.getIsActive();
+        product.setIsActive(!currentStatus);
+        product.setUpdatedDate(LocalDateTime.now());
+
+        Product savedProduct = productRepository.save(product);
+        log.info("Product ID: {} status toggled. New isActive state: {}", id, product.getIsActive());
+        return productMapper.toResponse(savedProduct);
     }
 
     // Yardımcı Metod: Ürünü bul, yoksa genel findById dene

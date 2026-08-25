@@ -11,7 +11,7 @@ import { ErrorMessage } from '@/components/ui/error-message';
 import { Pagination } from '@/components/ui/pagination';
 import { DeleteConfirmModal } from '@/components/ui/delete-confirm-modal';
 import { StockUpdateModal } from './StockUpdateModal';
-import { useProducts, useDeleteProduct, useCategories } from './useProductQueries';
+import { useProducts, useDeleteProduct, useCategories, useToggleProductStatus } from './useProductQueries';
 import type { Product } from './types';
 
 const PAGE_SIZE = 50; // Increased to allow better local filtering coverage
@@ -29,6 +29,7 @@ export function AdminProductsPage() {
     page,
     size: PAGE_SIZE,
     includeDeleted,
+    includeInactive: true,
   });
   
   const { data: categories } = useCategories();
@@ -57,6 +58,7 @@ export function AdminProductsPage() {
   }, [products, searchTerm, categoryMap]);
 
   const { mutate: deleteProduct, isPending: deleting } = useDeleteProduct();
+  const { mutate: toggleStatus } = useToggleProductStatus();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,6 +140,7 @@ export function AdminProductsPage() {
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden sm:table-cell">Kategori</th>
                 <th className="px-4 py-3 text-right font-medium text-muted-foreground">Fiyat</th>
                 <th className="px-4 py-3 text-right font-medium text-muted-foreground">Stok</th>
+                <th className="px-4 py-3 text-center font-medium text-muted-foreground">Durum</th>
                 <th className="px-4 py-3 text-right font-medium text-muted-foreground">İşlem</th>
               </tr>
             </thead>
@@ -149,13 +152,14 @@ export function AdminProductsPage() {
                       <td className="px-4 py-3 hidden sm:table-cell"><Skeleton className="h-4 w-20" /></td>
                       <td className="px-4 py-3"><Skeleton className="h-4 w-16 ml-auto" /></td>
                       <td className="px-4 py-3"><Skeleton className="h-4 w-10 ml-auto" /></td>
+                      <td className="px-4 py-3 flex justify-center"><Skeleton className="h-5 w-10 rounded-full" /></td>
                       <td className="px-4 py-3"><Skeleton className="h-8 w-20 ml-auto" /></td>
                     </tr>
                   ))
                 : !filteredProducts.length
                 ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
+                      <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
                         <div className="flex flex-col items-center gap-3">
                           <Package className="h-8 w-8 text-muted-foreground/40" />
                           <p>{searchTerm ? 'Aramanızla eşleşen ürün bulunamadı.' : 'Ürün bulunamadı'}</p>
@@ -182,9 +186,14 @@ export function AdminProductsPage() {
                               </div>
                             )}
                           </div>
-                          <div className="min-w-0">
-                            <p className="font-medium truncate max-w-[140px] sm:max-w-[200px]">
+                          <div className="min-w-0 flex flex-col gap-1">
+                            <p className="font-medium truncate max-w-[140px] sm:max-w-[200px] flex items-center gap-2">
                               {product.name}
+                              {(product.isActive ?? product.active) === false && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-destructive/10 text-destructive border border-destructive/20 uppercase tracking-wider">
+                                  Pasif
+                                </span>
+                              )}
                             </p>
                             <p className="text-xs text-muted-foreground font-mono">{product.productCode}</p>
                           </div>
@@ -220,6 +229,28 @@ export function AdminProductsPage() {
                           }>
                             {product.stock.currentStock}
                           </span>
+                        </button>
+                      </td>
+
+                      {/* Status */}
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => toggleStatus(product.id)}
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 ${
+                            (product.isActive ?? product.active) !== false ? 'bg-green-500' : 'bg-muted-foreground/30'
+                          }`}
+                          role="switch"
+                          aria-checked={(product.isActive ?? product.active) !== false}
+                          title={(product.isActive ?? product.active) !== false ? 'Pasife Al' : 'Aktifleştir'}
+                        >
+                          <span className="sr-only">Durum Değiştir</span>
+                          <span
+                            aria-hidden="true"
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                              (product.isActive ?? product.active) !== false ? 'translate-x-4' : 'translate-x-0'
+                            }`}
+                          />
                         </button>
                       </td>
 

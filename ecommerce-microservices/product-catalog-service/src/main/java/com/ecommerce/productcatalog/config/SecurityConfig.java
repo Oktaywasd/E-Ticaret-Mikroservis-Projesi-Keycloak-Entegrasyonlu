@@ -37,17 +37,23 @@ public class SecurityConfig {
                         // 1. Swagger & OpenAPI dokümantasyonu Herkese Açık
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
 
-                        // 2. GET İstekleri (Ürün/Kategori Listeleme) Herkese Açık
+                        // 2. GET İstekleri (Ürün/Kategori Listeleme, Yorum ve Soru Okuma) Herkese Açık
                         .requestMatchers(HttpMethod.GET, "/api/v1/products/**", "/api/v1/categories/**").permitAll()
 
-                        // 3. Stok İşlemleri (Stok Düşürme & Stok İade Etme) -> Müşteri (CUSTOMER), Satıcı ve Admin çağırabilsin
+                        // 3. Yorum & Soru-Cevap İşlemleri (Öncelikli tanımlanmalıdır)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/products/*/reviews").hasAnyRole("CUSTOMER", "ADMIN", "SELLER")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/products/*/questions").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/reviews/*/reply").hasAnyRole("ADMIN", "SELLER")
+
+                        // 4. Stok İşlemleri (Stok Düşürme & Stok İade Etme)
                         .requestMatchers(HttpMethod.PUT, "/api/v1/products/*/reduce-stock", "/api/v1/products/*/restore-stock").hasAnyRole("ADMIN", "SELLER", "CUSTOMER")
 
-                        // 4. Genel Ürün / Kategori Ekleme ve Güncelleme -> ADMIN veya SELLER
+                        // 5. Genel Ürün / Kategori Ekleme ve Güncelleme -> ADMIN veya SELLER
                         .requestMatchers(HttpMethod.POST, "/api/v1/products/**", "/api/v1/categories/**").hasAnyRole("ADMIN", "SELLER")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/products/**", "/api/v1/categories/**").hasAnyRole("ADMIN", "SELLER")
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/products/**", "/api/v1/categories/**").hasAnyRole("ADMIN", "SELLER")
 
-                        // 5. Silme İşlemleri -> Sadece ADMIN
+                        // 6. Silme İşlemleri -> Sadece ADMIN
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/products/**", "/api/v1/categories/**").hasRole("ADMIN")
 
                         // Diğer tüm istekler kimlik doğrulaması gerektirir

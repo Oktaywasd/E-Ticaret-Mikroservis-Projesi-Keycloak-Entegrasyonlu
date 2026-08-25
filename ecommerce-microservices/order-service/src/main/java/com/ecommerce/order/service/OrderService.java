@@ -14,7 +14,7 @@ public interface OrderService {
 
     List<OrderResponseDto> getMyOrders(String keycloakUserId);
 
-    List<OrderResponseDto> getAllOrders(); // Admin kullanımı için
+    List<OrderResponseDto> getAllOrders();
 
     OrderResponseDto updateOrderStatus(String orderId, OrderStatus newStatus);
 

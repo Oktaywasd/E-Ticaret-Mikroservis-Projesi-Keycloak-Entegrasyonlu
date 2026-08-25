@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ShoppingCart, Star, Package } from 'lucide-react';
+import { ShoppingCart, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useCartStore } from '@/features/cart/cartStore';
+import { StarRating } from '@/components/common/StarRating';
 import type { Product } from './types';
 
 interface ProductCardProps {
@@ -11,9 +13,11 @@ interface ProductCardProps {
 
 export function ProductCard({ product }: ProductCardProps) {
   const addItem = useCartStore((s) => s.addItem);
+  const [imgError, setImgError] = useState(false);
 
   const isOutOfStock = product.stock.currentStock === 0;
   const isLowStock = product.stock.currentStock > 0 && product.stock.currentStock <= 5;
+  const imageUrl = product.imageUrls?.[0] || product.imageUrl;
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -22,7 +26,7 @@ export function ProductCard({ product }: ProductCardProps) {
       productId: product.id,
       name: product.name,
       price: product.price.sellingPrice,
-      imageUrl: product.imageUrl,
+      imageUrl: imageUrl,
       quantity: 1,
       stock: product.stock.currentStock,
     });
@@ -39,12 +43,13 @@ export function ProductCard({ product }: ProductCardProps) {
     >
       {/* Image */}
       <div className="relative aspect-square overflow-hidden bg-muted/30">
-        {product.imageUrl ? (
+        {imageUrl && !imgError ? (
           <img
-            src={product.imageUrl}
+            src={imageUrl}
             alt={product.name}
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
             loading="lazy"
+            onError={() => setImgError(true)}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center">
@@ -106,10 +111,7 @@ export function ProductCard({ product }: ProductCardProps) {
 
         {/* Rating */}
         <div className="pt-2 flex items-center justify-end">
-          <div className="flex items-center gap-0.5">
-            <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-            <span className="text-xs text-muted-foreground">4.5</span>
-          </div>
+          <StarRating rating={product.ratingAverage} reviewCount={product.reviewCount} />
         </div>
       </div>
     </Link>

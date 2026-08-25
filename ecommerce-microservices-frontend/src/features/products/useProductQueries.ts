@@ -1,13 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   fetchProducts,
-  fetchProductsByCategory,
   fetchProductById,
   fetchCategories,
   createProduct,
   updateProduct,
   updateProductStock,
   deleteProduct,
+  toggleProductStatus,
   createCategory,
   updateCategory,
   deleteCategory,
@@ -34,14 +34,7 @@ export function useProducts(params: ProductQueryParams = {}) {
   });
 }
 
-export function useProductsByCategory(categoryId: string, params: ProductQueryParams = {}) {
-  return useQuery({
-    queryKey: ['products', 'category', categoryId, params],
-    queryFn: () => fetchProductsByCategory(categoryId, params),
-    placeholderData: (prev) => prev,
-    enabled: !!categoryId,
-  });
-}
+
 
 export function useProduct(id: string) {
   return useQuery({
@@ -99,6 +92,30 @@ export function useDeleteProduct() {
     mutationFn: (id: string) => deleteProduct(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: productKeys.lists() });
+    },
+  });
+}
+
+export function useToggleProductStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => toggleProductStatus(id),
+    onSuccess: (updated) => {
+      qc.setQueryData(productKeys.detail(updated.id), updated);
+      
+      // Update lists in cache instantly without causing a refetch that might hide it
+      qc.setQueriesData(
+        { queryKey: productKeys.lists() },
+        (oldData: any) => {
+          if (!oldData || !oldData.content) return oldData;
+          return {
+            ...oldData,
+            content: oldData.content.map((p: any) => 
+              p.id === updated.id ? { ...p, isActive: updated.isActive ?? updated.active, active: updated.active ?? updated.isActive } : p
+            )
+          };
+        }
+      );
     },
   });
 }

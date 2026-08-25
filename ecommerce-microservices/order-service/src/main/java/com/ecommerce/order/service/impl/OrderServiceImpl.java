@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -39,13 +40,11 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponseDto createOrder(CreateOrderRequestDto requestDto, String keycloakUserId) {
         log.info("Creating order for user: {}", keycloakUserId);
 
-        // 1. CRM Service üzerinden adres varlık kontrolü
         crmClient.getAddressById(requestDto.getAddressId());
 
         BigDecimal grandTotal = BigDecimal.ZERO;
         List<OrderItem> orderItems = new ArrayList<>();
 
-        // 2. Ürünlerin stok ve güncel fiyat kontrolü
         for (OrderItemRequestDto itemDto : requestDto.getItems()) {
             ProductResponseDto product = productCatalogClient.getProductById(itemDto.getProductId());
 
@@ -69,12 +68,10 @@ public class OrderServiceImpl implements OrderService {
             orderItems.add(orderItem);
         }
 
-        // Benzersiz ORD-XXXXXX üret
         String uniqueOrderCode = generateUniqueOrderCode();
 
-        // 3. Siparişi veritabanına kaydetme (orderCode eklendi)
         Order order = Order.builder()
-                .orderCode(uniqueOrderCode) // <--- EKLENDİ
+                .orderCode(uniqueOrderCode)
                 .keycloakUserId(keycloakUserId)
                 .addressId(requestDto.getAddressId())
                 .items(orderItems)
@@ -86,7 +83,6 @@ public class OrderServiceImpl implements OrderService {
 
         Order savedOrder = orderRepository.save(order);
 
-        // 4. Product Catalog Service üzerinde stok düşürme çağrıları
         for (OrderItem item : savedOrder.getItems()) {
             productCatalogClient.reduceStock(item.getProductId(), item.getQuantity());
         }
@@ -95,12 +91,11 @@ public class OrderServiceImpl implements OrderService {
         return orderMapper.toOrderResponseDto(savedOrder);
     }
 
-    // Benzersiz ORD-XXXXXX üreten metod
     private String generateUniqueOrderCode() {
-        java.security.SecureRandom random = new java.security.SecureRandom();
+        SecureRandom random = new SecureRandom();
         String code;
         do {
-            int number = 100000 + random.nextInt(900000); // 100000 - 999999
+            int number = 100000 + random.nextInt(900000);
             code = "ORD-" + number;
         } while (orderRepository.existsByOrderCode(code));
         return code;
@@ -163,7 +158,6 @@ public class OrderServiceImpl implements OrderService {
         order.setUpdatedAt(LocalDateTime.now());
         Order cancelledOrder = orderRepository.save(order);
 
-        // İptal edilen siparişteki tüm ürünlerin stoğunu Catalog servisine iade et
         if (cancelledOrder.getItems() != null) {
             for (OrderItem item : cancelledOrder.getItems()) {
                 try {
@@ -179,12 +173,14 @@ public class OrderServiceImpl implements OrderService {
         return orderMapper.toOrderResponseDto(cancelledOrder);
     }
 
-    // mavi tik için eklendi
     @Override
     public Boolean verifyUserPurchasedProduct(String userId, String productId) {
-        return orderRepository.existsByKeycloakUserIdAndStatusInAndItems_ProductId(
+        if (userId == null || productId == null) {
+            return false;
+        }
+        return orderRepository.existsByKeycloakUserIdAndStatusNotAndItems_ProductId(
                 userId,
-                List.of(OrderStatus.DELIVERED, OrderStatus.PAID),
+                OrderStatus.CANCELLED,
                 productId
         );
     }

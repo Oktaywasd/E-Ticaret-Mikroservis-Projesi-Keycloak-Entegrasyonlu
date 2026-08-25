@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import {
-  ShoppingCart, ChevronRight, Package, Star, Truck, Shield, RotateCcw, Minus, Plus,
+  ShoppingCart, ChevronRight, Package, Truck, Shield, RotateCcw, Minus, Plus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,9 @@ import { ProductDetailSkeleton } from '@/components/ui/skeleton';
 import { ErrorMessage } from '@/components/ui/error-message';
 import { useProduct } from './useProductQueries';
 import { useCartStore } from '@/features/cart/cartStore';
+import { StarRating } from '@/components/common/StarRating';
+import { ProductImageGallery } from '@/components/product/ProductImageGallery';
+import { ProductDiscussionTabs } from '@/components/product/ProductDiscussionTabs';
 import type { ProductVariant } from './types';
 
 export function ProductDetailPage() {
@@ -19,7 +22,6 @@ export function ProductDetailPage() {
 
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
   const [quantity, setQuantity] = useState(1);
-  const [selectedImage, setSelectedImage] = useState(0);
 
   if (isLoading) return <ProductDetailSkeleton />;
   if (isError || !product) return <ErrorMessage error={error} onRetry={refetch} />;
@@ -27,7 +29,6 @@ export function ProductDetailPage() {
   const basePrice = product.price.sellingPrice;
   const effectivePrice = basePrice + (selectedVariant?.additionalPrice ?? 0);
   const effectiveStock = selectedVariant?.stock ?? product.stock.currentStock;
-  const allImages = [product.imageUrl, ...(product.images ?? [])].filter(Boolean) as string[];
 
   const variantString = selectedVariant ? `${selectedVariant.name}: ${selectedVariant.value}` : undefined;
   const currentInCart = items.find(i => i.productId === product?.id && i.variant === variantString)?.quantity ?? 0;
@@ -68,42 +69,11 @@ export function ProductDetailPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">
         {/* ── Images ─────────────────────────────────────── */}
-        <div className="space-y-3">
-          {/* Main image */}
-          <div className="relative aspect-square rounded-xl overflow-hidden bg-muted/30 border border-border/50">
-            {allImages.length > 0 ? (
-              <img
-                src={allImages[selectedImage]}
-                alt={product.name}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center">
-                <Package className="h-24 w-24 text-muted-foreground/20" />
-              </div>
-            )}
-            {product.stock.currentStock === 0 && (
-              <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                <Badge variant="destructive" className="text-sm px-4 py-2">Stokta Yok</Badge>
-              </div>
-            )}
-          </div>
-
-          {/* Thumbnail row */}
-          {allImages.length > 1 && (
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {allImages.map((img, i) => (
-                <button
-                  key={i}
-                  onClick={() => setSelectedImage(i)}
-                  className={`flex-shrink-0 h-16 w-16 rounded-lg overflow-hidden border-2 transition-colors ${
-                    selectedImage === i ? 'border-violet-500' : 'border-border/50 hover:border-border'
-                  }`}
-                  aria-label={`Görsel ${i + 1}`}
-                >
-                  <img src={img} alt="" className="h-full w-full object-cover" />
-                </button>
-              ))}
+        <div className="space-y-3 relative">
+          <ProductImageGallery images={product.imageUrls} />
+          {product.stock.currentStock === 0 && (
+            <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded-xl z-10 pointer-events-none">
+              <Badge variant="destructive" className="text-sm px-4 py-2">Stokta Yok</Badge>
             </div>
           )}
         </div>
@@ -120,17 +90,9 @@ export function ProductDetailPage() {
           {/* Name */}
           <h1 className="text-2xl font-bold leading-snug">{product.name}</h1>
 
-          {/* Rating placeholder */}
+          {/* Rating */}
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-0.5">
-              {[1, 2, 3, 4, 5].map((s) => (
-                <Star
-                  key={s}
-                  className={`h-4 w-4 ${s <= 4 ? 'fill-amber-400 text-amber-400' : 'text-muted-foreground/40'}`}
-                />
-              ))}
-            </div>
-            <span className="text-sm text-muted-foreground">(4.0 · 24 değerlendirme)</span>
+            <StarRating rating={product.ratingAverage} reviewCount={product.reviewCount} />
           </div>
 
           {/* Price */}
@@ -268,6 +230,10 @@ export function ProductDetailPage() {
           </p>
         </div>
       </div>
+
+      {product?.id && (
+        <ProductDiscussionTabs productId={product.id} />
+      )}
     </div>
   );
 }

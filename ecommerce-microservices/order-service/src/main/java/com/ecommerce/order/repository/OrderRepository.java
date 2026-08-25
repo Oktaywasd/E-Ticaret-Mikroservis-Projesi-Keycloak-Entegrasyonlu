@@ -25,4 +25,11 @@ public interface OrderRepository extends MongoRepository<Order, String> {
             Collection<OrderStatus> statuses,
             String productId
     );
+
+    // İptal edilmemiş siparişler için kontrol (CANCELLED dışındakiler)
+    boolean existsByKeycloakUserIdAndStatusNotAndItems_ProductId(
+            String keycloakUserId,
+            OrderStatus excludedStatus,
+            String productId
+    );
 }

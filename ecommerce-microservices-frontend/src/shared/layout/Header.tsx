@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   ShoppingCart,
   User,
@@ -9,19 +9,65 @@ import {
   Menu,
   X,
   ChevronDown,
+  Search,
+  Image as ImageIcon
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { useAppAuth } from '@/hooks/useAppAuth';
 import { Badge } from '@/components/ui/badge';
 import { useCartStore } from '@/features/cart/cartStore';
 import { redirectToRegister } from '@/lib/auth/register';
+import { useDebounce } from '@/hooks/useDebounce';
+import { getSuggestions } from '@/features/products/productService';
+import type { ProductSuggestion } from '@/features/products/types';
 
 export function Header() {
   const auth = useAppAuth();
+  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const cartCount = useCartStore((s) => s.items.reduce((acc, i) => acc + i.quantity, 0));
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 300);
+  const [suggestions, setSuggestions] = useState<ProductSuggestion[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (debouncedSearch.trim().length >= 2) {
+      setIsSearching(true);
+      getSuggestions(debouncedSearch.trim())
+        .then(res => setSuggestions(res))
+        .catch(err => console.error(err))
+        .finally(() => setIsSearching(false));
+      setShowDropdown(true);
+    } else {
+      setSuggestions([]);
+      setShowDropdown(false);
+    }
+  }, [debouncedSearch]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSearchSubmit = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (searchQuery.trim()) {
+      setShowDropdown(false);
+      navigate(`/products?search=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
 
   const handleLogin = () => auth.signinRedirect();
   const handleLogout = () => auth.signoutRedirect({ post_logout_redirect_uri: window.location.origin });
@@ -64,6 +110,79 @@ export function Header() {
             </Button>
           )}
         </nav>
+
+        {/* Search Bar */}
+        <div className="hidden sm:block flex-1 max-w-md mx-auto" ref={searchRef}>
+          <form onSubmit={handleSearchSubmit} className="relative group">
+            <button 
+              type="submit" 
+              className="absolute inset-y-0 left-0 pl-3 flex items-center text-muted-foreground hover:text-violet-500 group-focus-within:text-violet-500 transition-colors"
+            >
+              <Search className="h-4 w-4" />
+            </button>
+            <Input
+              type="text"
+              placeholder="Ürün veya marka ara..."
+              className="pl-9 bg-muted/50 border-transparent focus-visible:bg-background focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20 h-9 w-full"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                if (!showDropdown) setShowDropdown(true);
+              }}
+              onFocus={() => {
+                if (searchQuery.trim().length >= 2) setShowDropdown(true);
+              }}
+            />
+            
+            {/* Dropdown */}
+            {showDropdown && searchQuery.trim().length >= 2 && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border/50 rounded-xl shadow-xl shadow-black/20 overflow-hidden z-50">
+                {isSearching ? (
+                  <div className="p-4 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+                    Aranıyor...
+                  </div>
+                ) : suggestions.length > 0 ? (
+                  <ul className="max-h-[300px] overflow-auto py-1">
+                    {suggestions.map((item) => (
+                      <li key={item.id}>
+                        <Link
+                          to={`/products/${item.id}`}
+                          onClick={() => {
+                            setShowDropdown(false);
+                            setSearchQuery('');
+                          }}
+                          className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/50 transition-colors"
+                        >
+                          <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center overflow-hidden shrink-0 border border-border/50">
+                            {item.imageUrl ? (
+                              <img src={item.imageUrl} alt={item.name} className="h-full w-full object-cover" />
+                            ) : (
+                              <ImageIcon className="h-4 w-4 text-muted-foreground/50" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate text-foreground">{item.name}</p>
+                            {item.brand && (
+                              <p className="text-xs text-muted-foreground truncate">{item.brand}</p>
+                            )}
+                          </div>
+                          <div className="text-sm font-semibold text-violet-400 shrink-0">
+                            {new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(item.price)}
+                          </div>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="p-4 text-center text-sm text-muted-foreground italic">
+                    Eşleşen ürün bulunamadı.
+                  </div>
+                )}
+              </div>
+            )}
+          </form>
+        </div>
 
         <div className="flex items-center gap-2 ml-auto">
           {/* Cart */}

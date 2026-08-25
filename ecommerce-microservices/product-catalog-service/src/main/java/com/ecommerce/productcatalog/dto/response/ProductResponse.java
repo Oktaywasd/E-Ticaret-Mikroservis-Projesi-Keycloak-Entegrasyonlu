@@ -25,6 +25,18 @@ public class ProductResponse {
     private PriceDto price;
     private StockDto stock;
     private List<VariantDto> variants;
+
+    // --- görsel ekleme ---
+    private List<String> imageUrls;
+    private Double ratingAverage;
+    private Integer reviewCount;
+    // ----------------------------
+
+    // --- Durum ve Silinme Bilgileri ---
+    private Boolean isActive;
+    private Boolean isDeleted;
+    // ---------------------------------
+
     private LocalDateTime createdDate;
     private LocalDateTime updatedDate;
 }
