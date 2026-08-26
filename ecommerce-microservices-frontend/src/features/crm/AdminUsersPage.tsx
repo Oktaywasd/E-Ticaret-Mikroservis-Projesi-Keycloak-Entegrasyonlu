@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Search, Users, Shield, ShieldCheck, ShieldOff, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, Users, Shield, ShieldCheck, ShieldOff, ChevronDown, ChevronUp, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,7 @@ import { useAdminUsers, useAssignRole, useRemoveRole } from './useCrmQueries';
 import type { AdminUser } from './types';
 import type { AppRole } from '@/types';
 import { useAppAuth } from '@/hooks/useAppAuth';
+import UserDetailModal from '@/components/admin/UserDetailModal';
 
 const ALL_ROLES: AppRole[] = ['ROLE_ADMIN', 'ROLE_CUSTOMER'];
 
@@ -27,9 +28,10 @@ function RoleBadge({ role }: { role: AppRole }) {
 
 interface UserRowProps {
   user: AdminUser;
+  onSelectUser: (user: AdminUser) => void;
 }
 
-function UserRow({ user }: UserRowProps) {
+function UserRow({ user, onSelectUser }: UserRowProps) {
   const [expanded, setExpanded] = useState(false);
   const assign = useAssignRole();
   const remove = useRemoveRole();
@@ -49,7 +51,10 @@ function UserRow({ user }: UserRowProps) {
 
   return (
     <>
-      <tr className="border-b border-border/30 hover:bg-muted/10 transition-colors">
+      <tr 
+        className="border-b border-border/30 hover:bg-muted/10 transition-colors cursor-pointer"
+        onClick={() => onSelectUser(user)}
+      >
         {/* Avatar + Name */}
         <td className="px-4 py-3">
           <div className="flex items-center gap-3">
@@ -96,18 +101,28 @@ function UserRow({ user }: UserRowProps) {
           </div>
         </td>
 
-        {/* Expand toggle */}
+        {/* Actions */}
         <td className="px-4 py-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setExpanded((v) => !v)}
-            aria-label="Rol yönetimi"
-            id={`expand-user-${user?.id}`}
-          >
-            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </Button>
+          <div className="flex items-center gap-1 justify-end">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-neutral-400 hover:text-white"
+              onClick={(e) => { e.stopPropagation(); onSelectUser(user); }}
+              title="Detayları Gör"
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }}
+              aria-label="Rol yönetimi"
+            >
+              {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </Button>
+          </div>
         </td>
       </tr>
 
@@ -164,6 +179,7 @@ function UserRow({ user }: UserRowProps) {
 export function AdminUsersPage() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const { data: users, isLoading, isError, error, refetch } = useAdminUsers();
   const auth = useAppAuth();
 
@@ -179,41 +195,35 @@ export function AdminUsersPage() {
        
        return {
          ...u,
-         roles: hasAdminRole ? ['ROLE_ADMIN'] : ['ROLE_CUSTOMER']
+         roles: hasAdminRole ? [...roles.filter(r => !r.includes('ADMIN')), 'ROLE_ADMIN'] : roles,
        } as AdminUser;
     });
   }, [users]);
 
-  const filtered = enrichedUsers.filter((u) => {
-    const q = search.toLowerCase();
-    const username = u?.username || '';
-    const email = u?.email || '';
-    const firstName = u?.firstName || '';
-    const lastName = u?.lastName || '';
-    
-    const matchesSearch = username.toLowerCase().includes(q) ||
-                          email.toLowerCase().includes(q) ||
-                          `${firstName} ${lastName}`.toLowerCase().includes(q);
-    
-    const roles = Array.isArray(u?.roles) ? u.roles : [];
-    
-    if (roleFilter === 'ADMIN') {
-      return matchesSearch && roles.includes('ROLE_ADMIN');
-    }
-    if (roleFilter === 'CUSTOMER') {
-      return matchesSearch && roles.includes('ROLE_CUSTOMER');
-    }
-    return matchesSearch;
-  });
+  const filtered = useMemo(() => {
+    return enrichedUsers.filter((u) => {
+      const matchSearch =
+        (u.email || '').toLowerCase().includes(search.toLowerCase()) ||
+        (u.firstName || '').toLowerCase().includes(search.toLowerCase()) ||
+        (u.lastName || '').toLowerCase().includes(search.toLowerCase()) ||
+        (u.username || '').toLowerCase().includes(search.toLowerCase());
+
+      const matchRole = roleFilter
+        ? u.roles.some((r: any) => typeof r === 'string' && (r.toUpperCase() === roleFilter || r.toUpperCase() === `ROLE_${roleFilter}`))
+        : true;
+
+      return matchSearch && matchRole;
+    });
+  }, [enrichedUsers, search, roleFilter]);
 
   return (
     <div className="space-y-5">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold">Kullanıcı Yönetimi</h1>
-          <p className="text-sm text-muted-foreground">
-            {filtered.length} kullanıcı listeleniyor
+          <h1 className="text-xl font-bold tracking-tight">Kullanıcı Yönetimi</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Müşteri ve admin hesaplarını yönetin, rolleri düzenleyin.
           </p>
         </div>
         {roleFilter && (
@@ -315,13 +325,19 @@ export function AdminUsersPage() {
                     </tr>
                   )
                 : filtered.map((user) => (
-                    <UserRow key={user.id} user={user} />
+                    <UserRow key={user.id} user={user} onSelectUser={setSelectedUser} />
                   ))
               }
             </tbody>
           </table>
         </div>
       )}
+
+      <UserDetailModal
+        user={selectedUser}
+        isOpen={!!selectedUser}
+        onClose={() => setSelectedUser(null)}
+      />
     </div>
   );
 }

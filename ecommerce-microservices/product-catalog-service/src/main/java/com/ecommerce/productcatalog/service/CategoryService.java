@@ -15,8 +15,9 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class CategoryService {
-    private  final CategoryRepository categoryRepository;
-    private  final CategoryMapper categoryMapper;
+
+    private final CategoryRepository categoryRepository;
+    private final CategoryMapper categoryMapper;
 
     public CategoryResponse createCategory(CategoryCreateRequest request) {
         // İş Kuralı: Aynı isimde kategori var mı kontrol et
@@ -24,12 +25,6 @@ public class CategoryService {
             throw new AlreadyExistsException("Bu isimde bir kategori zaten mevcut: " + request.getName());
         }
 
-        // Üst kategori var mı kontrol et (eğer parentId gönderildiyse)
-        if (request.getParentCategoryId() != null && !request.getParentCategoryId().isEmpty()) {
-            if (!categoryRepository.existsById(request.getParentCategoryId())) {
-                throw new ResourceNotFoundException("Üst kategori bulunamadı: " + request.getParentCategoryId());
-            }
-        }
         Category category = categoryMapper.toEntity(request);
         Category savedCategory = categoryRepository.save(category);
         return categoryMapper.toResponse(savedCategory);
@@ -38,5 +33,34 @@ public class CategoryService {
     public List<CategoryResponse> getAllCategories() {
         List<Category> categories = categoryRepository.findAll();
         return categories.stream().map(categoryMapper::toResponse).toList();
+    }
+
+    public CategoryResponse getCategoryById(String id) {
+        Category category = categoryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Kategori bulunamadı: " + id));
+        return categoryMapper.toResponse(category);
+    }
+
+    public CategoryResponse updateCategory(String id, CategoryCreateRequest request) {
+        Category category = categoryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Kategori bulunamadı: " + id));
+
+        // İsim değiştiyse ve yeni isimde başka bir kategori varsa hata fırlat
+        if (!category.getName().equalsIgnoreCase(request.getName())
+                && categoryRepository.existsByNameIgnoreCase(request.getName())) {
+            throw new AlreadyExistsException("Bu isimde bir kategori zaten mevcut: " + request.getName());
+        }
+
+        category.setName(request.getName());
+
+        Category updatedCategory = categoryRepository.save(category);
+        return categoryMapper.toResponse(updatedCategory);
+    }
+
+    public void deleteCategory(String id) {
+        if (!categoryRepository.existsById(id)) {
+            throw new ResourceNotFoundException("Kategori bulunamadı: " + id);
+        }
+        categoryRepository.deleteById(id);
     }
 }

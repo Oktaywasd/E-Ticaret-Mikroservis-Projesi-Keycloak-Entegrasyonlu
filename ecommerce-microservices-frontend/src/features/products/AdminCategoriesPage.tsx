@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Edit2, Trash2, Tag } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -92,6 +93,7 @@ function CategoryFormDialog({ open, onOpenChange, editing }: CategoryFormDialogP
 }
 
 export function AdminCategoriesPage() {
+  const navigate = useNavigate();
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Category | undefined>();
   const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
@@ -145,7 +147,8 @@ export function AdminCategoriesPage() {
           {categories.map((cat) => (
             <div
               key={cat.id}
-              className="flex items-center justify-between rounded-xl border border-border/50 bg-card p-4 hover:border-violet-500/30 transition-colors"
+              onClick={() => navigate(`/admin/products?categoryId=${cat.id}&categoryName=${encodeURIComponent(cat.name)}`)}
+              className="flex items-center justify-between rounded-xl border border-border/50 bg-card p-4 hover:border-violet-500/50 cursor-pointer transition-colors"
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div className="rounded-lg bg-violet-600/10 p-2 shrink-0">
@@ -163,7 +166,10 @@ export function AdminCategoriesPage() {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8"
-                  onClick={() => handleEdit(cat)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleEdit(cat);
+                  }}
                   aria-label="Düzenle"
                 >
                   <Edit2 className="h-3.5 w-3.5" />
@@ -172,7 +178,10 @@ export function AdminCategoriesPage() {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={() => setDeleteTarget(cat)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteTarget(cat);
+                  }}
                   aria-label="Sil"
                 >
                   <Trash2 className="h-3.5 w-3.5" />

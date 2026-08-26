@@ -6,6 +6,8 @@ export interface Category {
   parentId?: string;
   createdAt?: string;
   updatedAt?: string;
+  createdDate?: string;
+  updatedDate?: string;
 }
 
 // ─── Product Variant ──────────────────────────────────────────────────────────
@@ -25,13 +27,16 @@ export interface Product {
   description?: string;
   price: {
     sellingPrice: number;
-    discountedPrice: number;
+    discountedPrice?: number;
+    originalPrice?: number;
   };
   stock: {
     currentStock: number;
-    minimumStock: number;
+    minimumStock?: number;
   };
-  category: Category;
+  categoryId?: string;
+  categoryName?: string;
+  category?: Category; // Opsiyonel yapıldı (Backend'den düz string gelirse çökmemesi için)
   brand?: string;
   imageUrl?: string;
   images?: string[];
@@ -39,11 +44,14 @@ export interface Product {
   ratingAverage?: number;
   reviewCount?: number;
   variants?: ProductVariant[];
-  isActive: boolean;
+  isActive?: boolean;
   active?: boolean; // fallback
-  deleted?: boolean;
-  createdAt: string;
-  updatedAt: string;
+  isDeleted?: boolean; // Backend ile birebir uyum
+  deleted?: boolean;   // Frontend fallback
+  createdDate?: string;
+  updatedDate?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // ─── Product Suggestion ───────────────────────────────────────────────────────

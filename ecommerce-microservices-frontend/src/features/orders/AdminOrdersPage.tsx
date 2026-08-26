@@ -62,7 +62,6 @@ const PAGE_SIZE = 10;
 
 const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
   CREATED: { label: 'Bekliyor', icon: <Clock className="h-4 w-4" />, color: 'text-amber-500 bg-amber-500/10' },
-  PENDING: { label: 'Bekliyor', icon: <Clock className="h-4 w-4" />, color: 'text-amber-500 bg-amber-500/10' },
   PREPARING: { label: 'Hazırlanıyor', icon: <Package className="h-4 w-4" />, color: 'text-blue-500 bg-blue-500/10' },
   SHIPPED: { label: 'Kargoya Verildi', icon: <Truck className="h-4 w-4" />, color: 'text-violet-500 bg-violet-500/10' },
   DELIVERED: { label: 'Teslim Edildi', icon: <CheckCircle2 className="h-4 w-4" />, color: 'text-emerald-500 bg-emerald-500/10' },
@@ -121,7 +120,7 @@ export function AdminOrdersPage() {
             onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
             className="w-[180px]"
           >
-            <option value="ALL">Tüm Durumlar</option>
+            <option value="">Tüm Durumlar</option>
             {Object.entries(STATUS_CONFIG).map(([val, cfg]) => (
               <option key={val} value={val}>{cfg.label}</option>
             ))}
@@ -204,7 +203,7 @@ export function AdminOrdersPage() {
 
                   return filteredOrders.map((order: any) => {
                     const totalAmount = typeof order?.totalAmount === 'object' ? (order?.totalAmount?.amount || 0) : Number(order?.totalAmount || order?.totalPrice || 0);
-                    const status = order?.status || order?.orderStatus || "PENDING";
+                    const status = order?.status || order?.orderStatus || "CREATED";
                     
                     const customer = customerMap[order.keycloakUserId];
                     const customerName = customer?.name || order.customerName || order.userEmail || (order.keycloakUserId ? `Müşteri (${order.keycloakUserId.substring(0, 8)}...)` : "Misafir Müşteri");
@@ -216,7 +215,7 @@ export function AdminOrdersPage() {
                     const orderNumber = order?.orderCode || order?.orderNumber || formatOrderNumber(order?.id);
                     const orderDate = order.createdAt || order.orderDate ? formatDate(order.createdAt || order.orderDate) : "-";
                     
-                    const cfg = STATUS_CONFIG[status as OrderStatus] || STATUS_CONFIG['PENDING'];
+                    const cfg = STATUS_CONFIG[status as OrderStatus] || STATUS_CONFIG['CREATED'];
                     const isExpanded = expandedOrder === order.id;
                     
                     return (

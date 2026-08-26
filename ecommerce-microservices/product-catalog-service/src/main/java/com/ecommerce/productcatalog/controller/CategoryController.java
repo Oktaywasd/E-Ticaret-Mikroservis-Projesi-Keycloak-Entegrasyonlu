@@ -16,7 +16,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/categories")
 @RequiredArgsConstructor
-@Tag(name = "Category Management", description = "Kategori ekleme ve listeleme API'ları")
+@Tag(name = "Category Management", description = "Kategori ekleme, listeleme, güncelleme ve silme API'ları")
 public class CategoryController {
 
     private final CategoryService categoryService;
@@ -33,5 +33,26 @@ public class CategoryController {
     public ResponseEntity<List<CategoryResponse>> getAllCategories() {
         List<CategoryResponse> categories = categoryService.getAllCategories();
         return ResponseEntity.ok(categories);
+    }
+
+    @GetMapping("/{id}")
+    @Operation(summary = "ID ile Kategori Getir", description = "Belirtilen ID'ye sahip kategoriyi getirir.")
+    public ResponseEntity<CategoryResponse> getCategoryById(@PathVariable String id) {
+        return ResponseEntity.ok(categoryService.getCategoryById(id));
+    }
+
+    @PutMapping("/{id}")
+    @Operation(summary = "Kategori Güncelle", description = "Belirtilen kategorinin bilgilerini günceller.")
+    public ResponseEntity<CategoryResponse> updateCategory(
+            @PathVariable String id,
+            @Valid @RequestBody CategoryCreateRequest request) {
+        return ResponseEntity.ok(categoryService.updateCategory(id, request));
+    }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Kategori Sil", description = "Belirtilen kategoriyi sistemden siler.")
+    public ResponseEntity<Void> deleteCategory(@PathVariable String id) {
+        categoryService.deleteCategory(id);
+        return ResponseEntity.noContent().build();
     }
 }

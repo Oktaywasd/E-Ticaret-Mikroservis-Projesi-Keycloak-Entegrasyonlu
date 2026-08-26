@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus, Search, Edit2, Trash2, Package, Archive, X
 } from 'lucide-react';
@@ -11,13 +12,17 @@ import { ErrorMessage } from '@/components/ui/error-message';
 import { Pagination } from '@/components/ui/pagination';
 import { DeleteConfirmModal } from '@/components/ui/delete-confirm-modal';
 import { StockUpdateModal } from './StockUpdateModal';
-import { useProducts, useDeleteProduct, useCategories, useToggleProductStatus } from './useProductQueries';
+import { useProducts, useDeleteProduct, useCategories, useToggleProductStatus, productKeys } from './useProductQueries';
 import type { Product } from './types';
 
 const PAGE_SIZE = 50; // Increased to allow better local filtering coverage
 
 export function AdminProductsPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const categoryId = searchParams.get('categoryId') || undefined;
+  const categoryName = searchParams.get('categoryName') || '';
+
   const [page, setPage] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [includeDeleted, setIncludeDeleted] = useState(false);
@@ -30,6 +35,7 @@ export function AdminProductsPage() {
     size: PAGE_SIZE,
     includeDeleted,
     includeInactive: true,
+    categoryId,
   });
   
   const { data: categories } = useCategories();
@@ -58,7 +64,42 @@ export function AdminProductsPage() {
   }, [products, searchTerm, categoryMap]);
 
   const { mutate: deleteProduct, isPending: deleting } = useDeleteProduct();
-  const { mutate: toggleStatus } = useToggleProductStatus();
+  const { mutateAsync: toggleStatusAsync } = useToggleProductStatus();
+  
+  const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
+
+  const qc = useQueryClient();
+
+  const handleToggle = async (e: React.MouseEvent, productId: string) => {
+    e.preventDefault();
+    e.stopPropagation(); // prevent bubbling
+
+    if (togglingIds.has(productId)) return; // prevent double clicks
+
+    setTogglingIds(prev => {
+      const next = new Set(prev);
+      next.add(productId);
+      return next;
+    });
+
+    try {
+      // 1. Backend'e PATCH isteği at
+      await toggleStatusAsync(productId);
+      
+      // 2. React Query cache'ini yenile ve sunucudaki güncel durumu anında çek
+      await refetch();
+      qc.invalidateQueries({ queryKey: productKeys.lists() });
+      qc.invalidateQueries({ queryKey: ['products'] });
+    } catch (error) {
+      console.error("Durum güncellenirken hata:", error);
+    } finally {
+      setTogglingIds(prev => {
+        const next = new Set(prev);
+        next.delete(productId);
+        return next;
+      });
+    }
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,29 +144,50 @@ export function AdminProductsPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <form onSubmit={handleSearch} className="flex gap-2 flex-1 relative">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              id="admin-products-search"
-              placeholder="Ürün adı, stok kodu veya kategori ara…"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 pr-10"
-            />
-            {searchTerm && (
+      <div className="flex flex-col gap-3">
+        {categoryId && (
+          <div className="flex items-center">
+            <Badge variant="outline" className="bg-violet-500/10 text-violet-500 border-violet-500/20 px-3 py-1 flex items-center gap-2">
+              Kategori: {categoryName || categoryMap[categoryId] || 'Bilinmeyen'}
               <button
                 type="button"
-                onClick={clearSearch}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  searchParams.delete('categoryId');
+                  searchParams.delete('categoryName');
+                  setSearchParams(searchParams);
+                }}
+                className="hover:text-violet-700 transition-colors"
+                aria-label="Kategori filtresini temizle"
               >
-                <X className="h-4 w-4" />
+                <X className="h-3.5 w-3.5" />
               </button>
-            )}
+            </Badge>
           </div>
-          <Button type="submit" variant="outline" size="sm">Ara</Button>
-        </form>
+        )}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <form onSubmit={handleSearch} className="flex gap-2 flex-1 relative">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                id="admin-products-search"
+                placeholder="Ürün adı, stok kodu veya kategori ara…"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 pr-10"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <Button type="submit" variant="outline" size="sm">Ara</Button>
+          </form>
+        </div>
       </div>
 
       {/* Table */}
@@ -167,7 +229,9 @@ export function AdminProductsPage() {
                       </td>
                     </tr>
                   )
-                : filteredProducts.map((product) => (
+                : filteredProducts.map((product) => {
+                    const isChecked = Boolean(product.isActive ?? (product as any).active ?? false);
+                    return (
                     <tr
                       key={product.id}
                       className={`border-b border-border/30 hover:bg-muted/20 transition-colors ${
@@ -189,7 +253,7 @@ export function AdminProductsPage() {
                           <div className="min-w-0 flex flex-col gap-1">
                             <p className="font-medium truncate max-w-[140px] sm:max-w-[200px] flex items-center gap-2">
                               {product.name}
-                              {(product.isActive ?? product.active) === false && (
+                              {!isChecked && (
                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-destructive/10 text-destructive border border-destructive/20 uppercase tracking-wider">
                                   Pasif
                                 </span>
@@ -236,19 +300,20 @@ export function AdminProductsPage() {
                       <td className="px-4 py-3 text-center">
                         <button
                           type="button"
-                          onClick={() => toggleStatus(product.id)}
-                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 ${
-                            (product.isActive ?? product.active) !== false ? 'bg-green-500' : 'bg-muted-foreground/30'
+                          onClick={(e) => handleToggle(e, product.id)}
+                          disabled={togglingIds.has(product.id)}
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                            isChecked ? 'bg-emerald-500' : 'bg-slate-700'
                           }`}
                           role="switch"
-                          aria-checked={(product.isActive ?? product.active) !== false}
-                          title={(product.isActive ?? product.active) !== false ? 'Pasife Al' : 'Aktifleştir'}
+                          aria-checked={isChecked}
+                          title={isChecked ? 'Pasife Al' : 'Aktifleştir'}
                         >
                           <span className="sr-only">Durum Değiştir</span>
                           <span
                             aria-hidden="true"
                             className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                              (product.isActive ?? product.active) !== false ? 'translate-x-4' : 'translate-x-0'
+                              isChecked ? 'translate-x-5' : 'translate-x-0'
                             }`}
                           />
                         </button>
@@ -282,7 +347,8 @@ export function AdminProductsPage() {
                         </div>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
               }
             </tbody>
           </table>

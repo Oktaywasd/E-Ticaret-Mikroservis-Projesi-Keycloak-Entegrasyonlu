@@ -40,7 +40,7 @@ export function useProduct(id: string) {
   return useQuery({
     queryKey: productKeys.detail(id),
     queryFn: () => fetchProductById(id),
-    enabled: !!id,
+    enabled: !!id && /^[0-9a-fA-F]{24}$/.test(id),
   });
 }
 
@@ -102,20 +102,6 @@ export function useToggleProductStatus() {
     mutationFn: (id: string) => toggleProductStatus(id),
     onSuccess: (updated) => {
       qc.setQueryData(productKeys.detail(updated.id), updated);
-      
-      // Update lists in cache instantly without causing a refetch that might hide it
-      qc.setQueriesData(
-        { queryKey: productKeys.lists() },
-        (oldData: any) => {
-          if (!oldData || !oldData.content) return oldData;
-          return {
-            ...oldData,
-            content: oldData.content.map((p: any) => 
-              p.id === updated.id ? { ...p, isActive: updated.isActive ?? updated.active, active: updated.active ?? updated.isActive } : p
-            )
-          };
-        }
-      );
     },
   });
 }
