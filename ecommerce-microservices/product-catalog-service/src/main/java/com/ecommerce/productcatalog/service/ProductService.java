@@ -13,6 +13,7 @@ import com.ecommerce.productcatalog.repository.CategoryRepository;
 import com.ecommerce.productcatalog.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.bson.types.Decimal128;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -73,11 +74,10 @@ public class ProductService {
             ));
         }
 
-        // 0.6. Fiyat Aralığı Filtresi (MongoDB sayısal eşleşmesi için doubleValue() kullanılır)
         if (filter.getMinPrice() != null && filter.getMaxPrice() != null) {
             query.addCriteria(Criteria.where("price.sellingPrice")
-                    .gte(filter.getMinPrice().doubleValue())
-                    .lte(filter.getMaxPrice().doubleValue()));
+                    .gte(filter.getMinPrice().doubleValue())  // <-- Double gönderiliyor
+                    .lte(filter.getMaxPrice().doubleValue())); // <-- Double gönderiliyor
         } else if (filter.getMinPrice() != null) {
             query.addCriteria(Criteria.where("price.sellingPrice")
                     .gte(filter.getMinPrice().doubleValue()));

@@ -29,68 +29,79 @@ export function ProductsPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [gridView, setGridView] = useState<'grid' | 'list'>('grid');
 
-  // Sync state with URL params
-  const [filters, setFilters] = useState<ProductQueryParams>({
-    page: Number(searchParams.get('page') ?? 0),
-    size: PAGE_SIZE,
-    search: searchParams.get('search') ?? undefined,
-    categoryId: searchParams.get('categoryId') ?? undefined,
-    brand: searchParams.get('brand') ?? undefined,
-    sort: searchParams.get('sort') ?? undefined,
-    minPrice: searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : undefined,
-    maxPrice: searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : undefined,
+  // URL is the source of truth for active filters
+  const activeFilters = useMemo<ProductQueryParams>(() => {
+    const minP = searchParams.get('minPrice');
+    const maxP = searchParams.get('maxPrice');
+    return {
+      page: Number(searchParams.get('page') || 0),
+      size: PAGE_SIZE,
+      search: searchParams.get('search') || undefined,
+      categoryId: searchParams.get('categoryId') || undefined,
+      brand: searchParams.get('brand') || undefined,
+      sort: searchParams.get('sort') || undefined,
+      minPrice: minP ? Number(minP) : undefined,
+      maxPrice: maxP ? Number(maxP) : undefined,
+    };
+  }, [searchParams]);
+
+  // Local form state for the sidebar
+  const [filterForm, setFilterForm] = useState({
+    search: activeFilters.search ?? '',
+    categoryId: activeFilters.categoryId ?? '',
+    brand: activeFilters.brand ?? '',
+    sort: activeFilters.sort ?? '',
+    minPrice: activeFilters.minPrice ?? '',
+    maxPrice: activeFilters.maxPrice ?? '',
   });
 
-  const [draftFilters, setDraftFilters] = useState<ProductQueryParams>(filters);
+  // Sync form with URL when URL changes (e.g. from header search or initial load)
+  useEffect(() => {
+    setFilterForm({
+      search: activeFilters.search ?? '',
+      categoryId: activeFilters.categoryId ?? '',
+      brand: activeFilters.brand ?? '',
+      sort: activeFilters.sort ?? '',
+      minPrice: activeFilters.minPrice ?? '',
+      maxPrice: activeFilters.maxPrice ?? '',
+    });
+  }, [activeFilters]);
 
-  const { data, isLoading, isError, error, refetch } = useProducts(filters);
-  
+  const { data, isLoading, isError, error, refetch } = useProducts(activeFilters);
   const { data: categories } = useCategories();
 
-  // Keep URL in sync with active filters (and vice versa for external search)
-  useEffect(() => {
+  const handleApplyFilters = () => {
     const params: Record<string, string> = {};
-    if (filters.page) params.page = String(filters.page);
-    if (filters.search) params.search = filters.search;
-    if (filters.categoryId) params.categoryId = filters.categoryId;
-    if (filters.brand) params.brand = filters.brand;
-    if (filters.sort) params.sort = filters.sort;
-    if (filters.minPrice) params.minPrice = String(filters.minPrice);
-    if (filters.maxPrice) params.maxPrice = String(filters.maxPrice);
-    setSearchParams(params, { replace: true });
-  }, [filters, setSearchParams]);
-
-  // Sync external search changes (e.g. from Header)
-  useEffect(() => {
-    const urlSearch = searchParams.get('search') || undefined;
-    if (urlSearch !== filters.search) {
-      setFilters(prev => ({ ...prev, search: urlSearch, page: 0 }));
-      setDraftFilters(prev => ({ ...prev, search: urlSearch, page: 0 }));
+    
+    // Always reset page to 0 on apply
+    params.page = '0';
+    
+    if (filterForm.search) params.search = filterForm.search;
+    if (filterForm.categoryId) params.categoryId = filterForm.categoryId;
+    if (filterForm.brand) params.brand = filterForm.brand;
+    if (filterForm.sort) params.sort = filterForm.sort;
+    if (filterForm.minPrice !== '' && filterForm.minPrice !== null) {
+      params.minPrice = String(Number(filterForm.minPrice));
     }
-  }, [searchParams.get('search')]);
-
-  const updateDraftFilter = (updates: Partial<ProductQueryParams>) => {
-    setDraftFilters((prev) => ({ ...prev, ...updates }));
-  };
-
-  const applyFilters = () => {
-    setFilters({ ...draftFilters, page: 0 });
+    if (filterForm.maxPrice !== '' && filterForm.maxPrice !== null) {
+      params.maxPrice = String(Number(filterForm.maxPrice));
+    }
+    
+    setSearchParams(params, { replace: true });
     if (sidebarOpen) setSidebarOpen(false);
   };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    applyFilters();
+    handleApplyFilters();
   };
 
-  const clearFilters = () => {
-    const reset = { 
-      page: 0, 
-      size: PAGE_SIZE,
-      categoryId: filters.categoryId,
-    };
-    setDraftFilters(reset);
-    setFilters(reset);
+  const handleClearFilters = () => {
+    setSearchParams({ page: '0' }, { replace: true });
+  };
+
+  const updateFilterForm = (updates: Partial<typeof filterForm>) => {
+    setFilterForm(prev => ({ ...prev, ...updates }));
   };
 
   // Pagination & Data (Server-Side)
@@ -99,7 +110,13 @@ export function ProductsPage() {
   const currentPage = data?.number || 0;
   const currentProducts = data?.content || [];
 
-  const hasActiveFilters = !!(filters.search || filters.categoryId || filters.brand || filters.minPrice || filters.maxPrice);
+  const hasActiveFilters = !!(
+    activeFilters.search || 
+    activeFilters.categoryId || 
+    activeFilters.brand || 
+    activeFilters.minPrice || 
+    activeFilters.maxPrice
+  );
 
   return (
     <div className="container mx-auto px-4 py-6">
@@ -169,7 +186,7 @@ export function ProductsPage() {
             </div>
           )}
 
-          {/* Search */}
+            {/* Search */}
           <form onSubmit={handleSearch} className="space-y-1.5">
             <label className="text-sm font-medium">Ürün Ara</label>
             <div className="relative">
@@ -178,8 +195,8 @@ export function ProductsPage() {
                 id="products-search"
                 type="search"
                 placeholder="Ürün adı veya marka…"
-                value={draftFilters.search ?? ''}
-                onChange={(e) => updateDraftFilter({ search: e.target.value || undefined })}
+                value={filterForm.search}
+                onChange={(e) => updateFilterForm({ search: e.target.value })}
                 className="pl-9"
               />
             </div>
@@ -190,8 +207,8 @@ export function ProductsPage() {
             <label className="text-sm font-medium">Kategori</label>
             <Select
               id="filter-category"
-              value={draftFilters.categoryId ?? ''}
-              onChange={(e) => updateDraftFilter({ categoryId: e.target.value || undefined })}
+              value={filterForm.categoryId}
+              onChange={(e) => updateFilterForm({ categoryId: e.target.value })}
               placeholder="Tüm Kategoriler"
             >
               {categories?.map((c) => (
@@ -205,8 +222,8 @@ export function ProductsPage() {
             <label className="text-sm font-medium">Sıralama</label>
             <Select
               id="filter-sort"
-              value={draftFilters.sort ?? ''}
-              onChange={(e) => updateDraftFilter({ sort: e.target.value || undefined })}
+              value={filterForm.sort}
+              onChange={(e) => updateFilterForm({ sort: e.target.value })}
             >
               {SORT_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -223,10 +240,8 @@ export function ProductsPage() {
                 type="number"
                 placeholder="Min"
                 min={0}
-                value={draftFilters.minPrice ?? ''}
-                onChange={(e) =>
-                  updateDraftFilter({ minPrice: e.target.value ? Number(e.target.value) : undefined })
-                }
+                value={filterForm.minPrice}
+                onChange={(e) => updateFilterForm({ minPrice: e.target.value })}
               />
               <span className="text-muted-foreground">–</span>
               <Input
@@ -234,10 +249,8 @@ export function ProductsPage() {
                 type="number"
                 placeholder="Max"
                 min={0}
-                value={draftFilters.maxPrice ?? ''}
-                onChange={(e) =>
-                  updateDraftFilter({ maxPrice: e.target.value ? Number(e.target.value) : undefined })
-                }
+                value={filterForm.maxPrice}
+                onChange={(e) => updateFilterForm({ maxPrice: e.target.value })}
               />
             </div>
           </div>
@@ -249,19 +262,19 @@ export function ProductsPage() {
               id="filter-brand"
               type="text"
               placeholder="Marka adı…"
-              value={draftFilters.brand ?? ''}
-              onChange={(e) => updateDraftFilter({ brand: e.target.value || undefined })}
+              value={filterForm.brand}
+              onChange={(e) => updateFilterForm({ brand: e.target.value })}
             />
           </div>
 
           {/* Apply and Clear buttons */}
           <div className="flex flex-col gap-2 pt-2">
-            <Button size="sm" onClick={applyFilters} className="w-full">
+            <Button size="sm" onClick={handleApplyFilters} className="w-full">
               Filtreleri Uygula
             </Button>
             
             {hasActiveFilters && (
-              <Button variant="outline" size="sm" onClick={clearFilters} className="w-full">
+              <Button variant="outline" size="sm" onClick={handleClearFilters} className="w-full">
                 <X className="h-4 w-4 mr-2" />
                 Filtreleri Temizle
               </Button>
@@ -293,7 +306,7 @@ export function ProductsPage() {
               <p className="font-semibold">Ürün bulunamadı</p>
               <p className="text-sm text-muted-foreground">Filtrelerinizi değiştirerek tekrar deneyin.</p>
               {hasActiveFilters && (
-                <Button variant="outline" size="sm" onClick={clearFilters}>
+                <Button variant="outline" size="sm" onClick={handleClearFilters}>
                   Filtreleri Temizle
                 </Button>
               )}
@@ -317,7 +330,11 @@ export function ProductsPage() {
                 totalPages={totalPages}
                 totalElements={totalElements}
                 pageSize={PAGE_SIZE}
-                onPageChange={(page) => setFilters((f) => ({ ...f, page }))}
+                onPageChange={(page) => {
+                  const newParams = new URLSearchParams(searchParams);
+                  newParams.set('page', String(page));
+                  setSearchParams(newParams, { replace: true });
+                }}
               />
             </>
           )}
