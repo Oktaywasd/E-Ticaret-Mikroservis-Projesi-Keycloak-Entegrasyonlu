@@ -39,6 +39,7 @@ export function ProductCard({ product }: ProductCardProps) {
     <Link
       to={`/products/${product.id}`}
       id={`product-card-${product.id}`}
+      data-testid="product-card"
       className="group relative flex flex-col rounded-xl border border-border/50 bg-card overflow-hidden hover:border-violet-500/40 hover:shadow-lg hover:shadow-violet-500/10 transition-all duration-300"
     >
       {/* Image */}
@@ -71,6 +72,7 @@ export function ProductCard({ product }: ProductCardProps) {
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-center pb-4">
           <Button
             id={`add-to-cart-${product.id}`}
+            data-testid="add-to-cart-button"
             size="sm"
             onClick={handleAddToCart}
             disabled={isOutOfStock}
@@ -98,13 +100,13 @@ export function ProductCard({ product }: ProductCardProps) {
         </div>
 
         {/* Name */}
-        <h3 className="font-semibold text-lg leading-tight line-clamp-2 mb-1" title={product.name}>
+        <h3 className="font-semibold text-lg leading-tight line-clamp-2 mb-1" title={product.name} data-testid="product-title">
           {product.name}
         </h3>
         
         {/* Price */}
         <div className="mt-auto flex flex-col gap-0.5">
-          <span className="font-bold text-lg text-violet-700 whitespace-nowrap">
+          <span className="font-bold text-lg text-violet-700 whitespace-nowrap" data-testid="product-price">
             {formatPrice(product.price.sellingPrice)}
           </span>
         </div>

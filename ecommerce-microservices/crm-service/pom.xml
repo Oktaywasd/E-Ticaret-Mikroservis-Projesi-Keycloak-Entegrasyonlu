@@ -5,8 +5,8 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.2.5</version> <!-- Yaygın stabil sürüm, uyumluluk için güncellendi -->
-        <relativePath/> <!-- lookup parent from repository -->
+        <version>3.2.5</version>
+        <relativePath/>
     </parent>
     <groupId>com.ecommerce</groupId>
     <artifactId>crm-service</artifactId>
@@ -18,24 +18,37 @@
         <java.version>21</java.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <lombok-mapstruct-binding.version>0.2.0</lombok-mapstruct-binding.version>
+        <byte-buddy.version>1.15.11</byte-buddy.version>
     </properties>
 
     <dependencies>
-        <!-- 1. MapStruct (DTO / Entity dönüşümleri için) -->
+        <!-- 1. Byte Buddy (Hibernate & Java 23/21 uyumluluğu için) -->
+        <dependency>
+            <groupId>net.bytebuddy</groupId>
+            <artifactId>byte-buddy</artifactId>
+            <version>${byte-buddy.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>net.bytebuddy</groupId>
+            <artifactId>byte-buddy-agent</artifactId>
+            <version>${byte-buddy.version}</version>
+        </dependency>
+
+        <!-- 2. MapStruct -->
         <dependency>
             <groupId>org.mapstruct</groupId>
             <artifactId>mapstruct</artifactId>
             <version>${mapstruct.version}</version>
         </dependency>
 
-        <!-- 2. Swagger / OpenAPI Documentation -->
+        <!-- 3. Swagger / OpenAPI Documentation -->
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>2.5.0</version>
         </dependency>
 
-        <!-- 3. Keycloak Admin Client (Kullanıcı yönetimi REST API için) -->
+        <!-- 4. Keycloak Admin Client -->
         <dependency>
             <groupId>org.keycloak</groupId>
             <artifactId>keycloak-admin-client</artifactId>
@@ -87,19 +100,6 @@
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
-
-        <dependency>
-            <groupId>net.bytebuddy</groupId>
-            <artifactId>byte-buddy</artifactId>
-            <version>1.15.11</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>net.bytebuddy</groupId>
-            <artifactId>byte-buddy-agent</artifactId>
-            <version>1.15.11</version>
-            <scope>test</scope>
-        </dependency>
     </dependencies>
 
     <build>
@@ -146,5 +146,4 @@
             </plugin>
         </plugins>
     </build>
-
 </project>

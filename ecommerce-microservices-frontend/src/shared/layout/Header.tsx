@@ -97,7 +97,7 @@ export function Header() {
             <Link to="/products">Ürünler</Link>
           </Button>
           <Button variant="ghost" size="sm" asChild className="group relative">
-            <Link to="/reels">
+            <Link to="/reels" data-testid="reels-nav-link">
               Reels
               <span className="ml-1.5 inline-flex items-center rounded-md bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-500 ring-1 ring-inset ring-rose-500/20 group-hover:bg-rose-500/20">
                 Yeni
@@ -122,6 +122,7 @@ export function Header() {
             </button>
             <Input
               type="text"
+              data-testid="search-input"
               placeholder="Ürün veya marka ara..."
               className="pl-9 bg-muted/50 border-transparent focus-visible:bg-background focus-visible:border-violet-500/50 focus-visible:ring-violet-500/20 h-9 w-full"
               value={searchQuery}
@@ -187,10 +188,10 @@ export function Header() {
         <div className="flex items-center gap-2 ml-auto">
           {/* Cart */}
           <Button variant="ghost" size="icon" asChild className="relative">
-            <Link to="/cart" id="cart-button">
+            <Link to="/cart" id="cart-button" data-testid="cart-button">
               <ShoppingCart className="h-5 w-5" />
               {cartCount > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-violet-600 text-[10px] font-bold text-white">
+                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-violet-600 text-[10px] font-bold text-white" data-testid="cart-badge">
                   {cartCount > 99 ? '99+' : cartCount}
                 </span>
               )}
@@ -269,7 +270,7 @@ export function Header() {
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <Button id="login-button" variant="ghost" size="sm" onClick={handleLogin}>
+              <Button id="login-button" data-testid="login-button" variant="ghost" size="sm" onClick={handleLogin}>
                 Giriş Yap
               </Button>
               <Button
@@ -306,7 +307,7 @@ export function Header() {
               </Link>
             </Button>
             <Button variant="ghost" className="justify-start text-rose-500 hover:text-rose-600 hover:bg-rose-500/10" asChild>
-              <Link to="/reels" onClick={() => setMobileMenuOpen(false)}>
+              <Link to="/reels" onClick={() => setMobileMenuOpen(false)} data-testid="reels-nav-link">
                 Reels <Badge variant="secondary" className="ml-2 bg-rose-500/20 text-rose-600 hover:bg-rose-500/30">Yeni</Badge>
               </Link>
             </Button>

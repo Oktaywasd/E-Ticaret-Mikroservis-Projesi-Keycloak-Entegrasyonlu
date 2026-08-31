@@ -88,7 +88,7 @@ export function ProductDetailPage() {
           </div>
 
           {/* Name */}
-          <h1 className="text-2xl font-bold leading-snug">{product.name}</h1>
+          <h1 className="text-2xl font-bold leading-snug" data-testid="product-title">{product.name}</h1>
 
           {/* Rating */}
           <div className="flex items-center gap-2">
@@ -98,7 +98,7 @@ export function ProductDetailPage() {
           {/* Price */}
           <div className="py-4 border-y border-border/50 flex flex-col gap-1">
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-violet-400">
+              <span className="text-3xl font-bold text-violet-400" data-testid="product-price">
                 {formatPrice(effectivePrice)}
               </span>
               {selectedVariant?.additionalPrice !== undefined && selectedVariant.additionalPrice !== 0 && (
@@ -188,6 +188,7 @@ export function ProductDetailPage() {
 
             <Button
               id="add-to-cart-detail"
+              data-testid="add-to-cart-button"
               className="flex-1 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 shadow-lg shadow-violet-500/20"
               disabled={remainingStock <= 0 || effectiveStock === 0}
               onClick={handleAddToCart}

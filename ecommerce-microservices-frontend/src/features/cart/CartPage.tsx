@@ -20,7 +20,7 @@ export function CartPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8" data-testid="cart-page">
       <h1 className="text-2xl font-bold mb-6">Sepetim</h1>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-3">
@@ -28,6 +28,7 @@ export function CartPage() {
             <div
               key={`${item.productId}-${item.variant}`}
               className="flex gap-4 rounded-xl border border-border/50 bg-card p-4"
+              data-testid="cart-item"
             >
               <div className="h-20 w-20 rounded-lg bg-muted shrink-0 overflow-hidden">
                 {item.imageUrl ? (
@@ -50,6 +51,7 @@ export function CartPage() {
                   variant="outline"
                   size="icon"
                   className="h-7 w-7"
+                  data-testid="cart-decrease-qty"
                   onClick={() => updateQuantity(item.productId, item.quantity - 1, item.variant)}
                 >
                   <Minus className="h-3 w-3" />
@@ -59,6 +61,7 @@ export function CartPage() {
                   variant="outline"
                   size="icon"
                   className="h-7 w-7"
+                  data-testid="cart-increase-qty"
                   onClick={() => updateQuantity(item.productId, item.quantity + 1, item.variant)}
                   disabled={item.stock !== undefined && item.quantity >= item.stock}
                 >
@@ -68,6 +71,7 @@ export function CartPage() {
                   variant="ghost"
                   size="icon"
                   className="h-7 w-7 text-destructive hover:text-destructive ml-2"
+                  data-testid="cart-remove-item"
                   onClick={() => removeItem(item.productId, item.variant)}
                 >
                   <Trash2 className="h-3 w-3" />
@@ -90,12 +94,13 @@ export function CartPage() {
           </div>
           <div className="border-t border-border/50 pt-4 flex justify-between font-bold">
             <span>Toplam</span>
-            <span className="text-violet-400">
+            <span className="text-violet-400" data-testid="cart-total-price">
               {totalPrice().toLocaleString('tr-TR', { style: 'currency', currency: 'TRY' })}
             </span>
           </div>
           <Button
             id="checkout-button"
+            data-testid="checkout-button"
             className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
             asChild
           >

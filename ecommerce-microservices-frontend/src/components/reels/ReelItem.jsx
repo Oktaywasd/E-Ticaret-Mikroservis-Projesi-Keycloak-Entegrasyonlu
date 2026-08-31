@@ -83,7 +83,7 @@ export default function ReelItem({ reel, isActive, onOpenComments, commentCount 
   };
 
   return (
-    <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden select-none">
+    <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden select-none" data-testid="reels-video-card">
       {/* Video */}
       <video
         ref={videoRef}
@@ -116,7 +116,7 @@ export default function ReelItem({ reel, isActive, onOpenComments, commentCount 
       {/* Sağ Yan Sayaç ve Aksiyon Butonları */}
       <div className="absolute right-3 bottom-20 z-20 flex flex-col items-center gap-4">
         {/* Beğeni */}
-        <button onClick={handleLike} className="flex flex-col items-center group">
+        <button onClick={handleLike} className="flex flex-col items-center group" data-testid="reels-like-button">
           <div className={`p-3 rounded-full backdrop-blur-md transition ${isLiked ? 'bg-rose-600/90 text-white' : 'bg-black/40 text-white group-hover:bg-black/60'}`}>
             <Heart size={24} className={isLiked ? 'fill-white' : ''} />
           </div>
@@ -124,7 +124,7 @@ export default function ReelItem({ reel, isActive, onOpenComments, commentCount 
         </button>
 
         {/* Yorum */}
-        <button onClick={(e) => { e.stopPropagation(); onOpenComments(); }} className="flex flex-col items-center group">
+        <button onClick={(e) => { e.stopPropagation(); onOpenComments(); }} className="flex flex-col items-center group" data-testid="reels-comment-button">
           <div className="p-3 rounded-full bg-black/40 backdrop-blur-md text-white group-hover:bg-black/60 transition">
             <MessageCircle size={24} />
           </div>
