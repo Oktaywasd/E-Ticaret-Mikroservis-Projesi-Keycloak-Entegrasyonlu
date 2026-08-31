@@ -5,6 +5,7 @@ import { useAdminOrders } from './useOrderQueries';
 import { useAdminUsers } from '@/features/crm/useCrmQueries';
 import { useProducts } from '@/features/products/useProductQueries';
 import { Skeleton } from '@/components/ui/skeleton';
+import { CacheStatusCard } from '@/components/admin/CacheStatusCard';
 
 export function AdminDashboardPage() {
   const auth = useAppAuth();
@@ -104,60 +105,68 @@ export function AdminDashboardPage() {
         </div>
       )}
 
-      {/* Sipariş Durum Dağılımı Bar Chart (Tailwind) */}
+      {/* Chart & Cache Status Grid */}
       {!isLoading && (
-        <div className="rounded-xl border border-border/50 bg-card p-6 shadow-sm">
-          <h2 className="text-lg font-semibold mb-6">Sipariş Durum Dağılımı</h2>
-          
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span>Tamamlanan</span>
-                </div>
-                <span className="font-medium">{completedOrders.length}</span>
-              </div>
-              <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-emerald-500 rounded-full" 
-                  style={{ width: `${totalOrders > 0 ? (completedOrders.length / totalOrders) * 100 : 0}%` }}
-                />
-              </div>
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Sipariş Durum Dağılımı Bar Chart (Tailwind) */}
+          <div className="rounded-xl border border-border/50 bg-card p-6 shadow-sm flex flex-col justify-center">
+            <h2 className="text-lg font-semibold mb-6">Sipariş Durum Dağılımı</h2>
             
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <XCircle className="h-4 w-4 text-destructive" />
-                  <span>İptal Edilen</span>
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    <span>Tamamlanan</span>
+                  </div>
+                  <span className="font-medium">{completedOrders.length}</span>
                 </div>
-                <span className="font-medium">{cancelledOrders.length}</span>
+                <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-emerald-500 rounded-full" 
+                    style={{ width: `${totalOrders > 0 ? (completedOrders.length / totalOrders) * 100 : 0}%` }}
+                  />
+                </div>
               </div>
-              <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-destructive rounded-full" 
-                  style={{ width: `${cancelRate}%` }}
-                />
+              
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <XCircle className="h-4 w-4 text-destructive" />
+                    <span>İptal Edilen</span>
+                  </div>
+                  <span className="font-medium">{cancelledOrders.length}</span>
+                </div>
+                <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-destructive rounded-full" 
+                    style={{ width: `${cancelRate}%` }}
+                  />
+                </div>
               </div>
-            </div>
 
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <LayoutDashboard className="h-4 w-4 text-blue-500" />
-                  <span>Devam Eden / Bekleyen</span>
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <LayoutDashboard className="h-4 w-4 text-blue-500" />
+                    <span>Devam Eden / Bekleyen</span>
+                  </div>
+                  <span className="font-medium">{totalOrders - completedOrders.length - cancelledOrders.length}</span>
                 </div>
-                <span className="font-medium">{totalOrders - completedOrders.length - cancelledOrders.length}</span>
-              </div>
-              <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-blue-500 rounded-full" 
-                  style={{ width: `${totalOrders > 0 ? ((totalOrders - completedOrders.length - cancelledOrders.length) / totalOrders) * 100 : 0}%` }}
-                />
+                <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-blue-500 rounded-full" 
+                    style={{ width: `${totalOrders > 0 ? ((totalOrders - completedOrders.length - cancelledOrders.length) / totalOrders) * 100 : 0}%` }}
+                  />
+                </div>
               </div>
             </div>
           </div>
+
+          {/* Cache Status Card - Only for Admins */}
+          {auth.isAdmin && (
+            <CacheStatusCard />
+          )}
         </div>
       )}
 

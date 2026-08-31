@@ -66,6 +66,9 @@ export function ProductCard({ product }: ProductCardProps) {
           {isLowStock && !isOutOfStock && (
             <Badge variant="warning" className="text-[10px]">Son {product.stock.currentStock} adet</Badge>
           )}
+          {product.salesCount && product.salesCount > 0 ? (
+            <Badge className="text-[10px] bg-emerald-500 hover:bg-emerald-600 border-transparent text-white">🔥 {product.salesCount} Adet Satıldı</Badge>
+          ) : null}
         </div>
 
         {/* Quick Add overlay */}

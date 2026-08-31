@@ -8,6 +8,7 @@ import com.ecommerce.productcatalog.model.Product;
 import com.ecommerce.productcatalog.model.Review;
 import com.ecommerce.productcatalog.repository.ProductRepository;
 import com.ecommerce.productcatalog.repository.ReviewRepository;
+import com.ecommerce.productcatalog.service.CacheService;
 import com.ecommerce.productcatalog.service.impl.ReviewServiceImpl;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
@@ -62,6 +63,8 @@ class ProductReviewWorkflowE2ETest {
 
     private Product testProduct;
 
+    private CacheService cacheService;
+
     @BeforeAll
     static void startWireMock() {
         wireMockServer = new WireMockServer(WireMockConfiguration.wireMockConfig().port(9571));
@@ -81,7 +84,7 @@ class ProductReviewWorkflowE2ETest {
         MockitoAnnotations.openMocks(this);
         wireMockServer.resetAll();
 
-        reviewService = new ReviewServiceImpl(reviewRepository, productRepository, orderClient);
+        reviewService = new ReviewServiceImpl(reviewRepository, productRepository, orderClient, cacheService);
 
         testProduct = Product.builder()
                 .id(PRODUCT_ID)

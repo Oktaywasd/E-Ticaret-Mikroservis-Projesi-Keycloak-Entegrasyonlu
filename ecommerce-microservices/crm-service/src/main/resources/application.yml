@@ -20,16 +20,26 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
-
-  # --- Keycloak JWT OAuth2 Resource Server ---
   security:
     oauth2:
       resourceserver:
         jwt:
           issuer-uri: http://localhost:8080/realms/ecommerce-realm
           jwk-set-uri: http://localhost:8080/realms/ecommerce-realm/protocol/openid-connect/certs
-
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 2
 # --- Keycloak Admin REST API Konfigürasyonu ---
+app:
+  cache:
+    session-ttl: 86400 # 24 saat (saniye cinsinden)
 keycloak:
   realm: ecommerce-realm
   auth-server-url: http://localhost:8080

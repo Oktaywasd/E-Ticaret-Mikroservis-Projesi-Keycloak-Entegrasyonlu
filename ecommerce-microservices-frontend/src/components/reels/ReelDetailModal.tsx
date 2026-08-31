@@ -26,7 +26,7 @@ export default function ReelDetailModal({ reel, isOpen, onClose, onDelete }: Ree
   const { data: productData, isLoading: isProductLoading } = useProduct(isValidProductId ? reel.productId : '');
 
   const { data: usersData } = useAdminUsers();
-  const allUsers: any[] = Array.isArray(usersData) ? usersData : (usersData?.content || []);
+  const allUsers: any[] = Array.isArray(usersData) ? usersData : ((usersData as any)?.content || []);
 
   // Kullanıcı adı çözümleme fonksiyonu (Öncelik: Keycloak username / email prefix)
   const extractUsername = (target: any) => {

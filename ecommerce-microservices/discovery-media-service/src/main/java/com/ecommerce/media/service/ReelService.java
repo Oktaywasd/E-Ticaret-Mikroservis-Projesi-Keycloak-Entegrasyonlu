@@ -20,4 +20,8 @@ public interface ReelService {
     List<ReelCommentResponse> getComments(String reelId);
     void pinComment(String commentId, String currentUserId, boolean isAdmin);
     void deleteReel(String id, String currentUserId, boolean isAdmin);
+
+    // Redis Cache Helpers
+    void clearReelsFeedCache();
+    Page<ReelResponse> fetchReelsFeedFromDb(Pageable pageable);
 }

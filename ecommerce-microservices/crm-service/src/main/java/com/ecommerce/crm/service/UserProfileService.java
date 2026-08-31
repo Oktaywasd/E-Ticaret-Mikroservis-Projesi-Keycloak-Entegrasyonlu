@@ -7,12 +7,18 @@ import com.ecommerce.crm.exception.ResourceNotFoundException;
 import com.ecommerce.crm.mapper.UserProfileMapper;
 import com.ecommerce.crm.model.UserProfile;
 import com.ecommerce.crm.repository.UserProfileRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserProfileService {
@@ -20,6 +26,13 @@ public class UserProfileService {
     private final UserProfileRepository userProfileRepository;
     private final UserProfileMapper userProfileMapper;
     private final KeycloakAdminService keycloakAdminService;
+    private final CacheService cacheService;
+    private final ObjectMapper objectMapper;
+
+    private static final String CACHE_USER_SESSION_PREFIX = "cache:session:user:";
+
+    @Value("${app.cache.session-ttl:86400}")
+    private long sessionTtl;
 
     /**
      * Yeni kullanıcı kaydı açar.
@@ -39,17 +52,36 @@ public class UserProfileService {
         userProfile.setKeycloakUserId(keycloakUserId);
 
         UserProfile savedProfile = userProfileRepository.save(userProfile);
-        return userProfileMapper.toResponse(savedProfile);
+        UserProfileResponse response = userProfileMapper.toResponse(savedProfile);
+
+        // Oturumu / profili hemen önbelleğe al
+        cacheUserSession(keycloakUserId, response);
+        return response;
     }
 
     /**
      * Keycloak Unique ID (sub claim) üzerinden kullanıcının profil bilgilerini getirir.
+     * Önce Redis cache kontrol edilir, yoksa PostgreSQL sorgusu yapılır.
      */
     @Transactional(readOnly = true)
     public UserProfileResponse getProfileByKeycloakUserId(UUID keycloakUserId) {
+        String cacheKey = CACHE_USER_SESSION_PREFIX + keycloakUserId.toString();
+
+        Object cachedData = cacheService.get(cacheKey);
+        if (cachedData != null) {
+            try {
+                return objectMapper.convertValue(cachedData, UserProfileResponse.class);
+            } catch (Exception e) {
+                log.warn("Session cache deserialize edilemedi, DB'den çekiliyor: {}", e.getMessage());
+            }
+        }
+
         UserProfile profile = userProfileRepository.findByKeycloakUserId(keycloakUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("Kullanıcı profili bulunamadı: " + keycloakUserId));
-        return userProfileMapper.toResponse(profile);
+
+        UserProfileResponse response = userProfileMapper.toResponse(profile);
+        cacheUserSession(keycloakUserId, response);
+        return response;
     }
 
     /**
@@ -65,13 +97,16 @@ public class UserProfileService {
         userProfile.setKeycloakUserId(keycloakUserId);
         userProfile.setEmail(email);
         userProfileMapper.updateEntityFromRequest(request, userProfile);
-        
+
         UserProfile savedProfile = userProfileRepository.save(userProfile);
-        return userProfileMapper.toResponse(savedProfile);
+        UserProfileResponse response = userProfileMapper.toResponse(savedProfile);
+
+        cacheUserSession(keycloakUserId, response);
+        return response;
     }
 
     /**
-     * Kullanıcının profil bilgilerini günceller.
+     * Kullanıcının profil bilgilerini günceller (Cache Invalidation).
      */
     @Transactional
     public UserProfileResponse updateProfile(UUID keycloakUserId, UserProfileUpdateRequest request) {
@@ -80,17 +115,38 @@ public class UserProfileService {
 
         userProfileMapper.updateEntityFromRequest(request, profile);
         UserProfile updatedProfile = userProfileRepository.save(profile);
-        return userProfileMapper.toResponse(updatedProfile);
+        UserProfileResponse response = userProfileMapper.toResponse(updatedProfile);
+
+        // Güncellenmiş profili cache'e yaz
+        cacheUserSession(keycloakUserId, response);
+        return response;
+    }
+
+    /**
+     * Kullanıcı oturumunu/profilini önbellekten siler (Logout).
+     */
+    public void evictUserSession(UUID keycloakUserId) {
+        String cacheKey = CACHE_USER_SESSION_PREFIX + keycloakUserId.toString();
+        cacheService.delete(cacheKey);
+        log.info("User session/profile cache temizlendi: {}", cacheKey);
+    }
+
+    /**
+     * Kullanıcı profilini 24 saatlik TTL ile önbelleğe yazar.
+     */
+    public void cacheUserSession(UUID keycloakUserId, UserProfileResponse profileResponse) {
+        String cacheKey = CACHE_USER_SESSION_PREFIX + keycloakUserId.toString();
+        cacheService.set(cacheKey, profileResponse, sessionTtl);
     }
 
     /**
      * Tüm kullanıcı profillerini getirir (Admin kullanımı için).
      */
     @Transactional(readOnly = true)
-    public java.util.List<UserProfileResponse> getAllProfiles() {
+    public List<UserProfileResponse> getAllProfiles() {
         return userProfileRepository.findAll()
                 .stream()
                 .map(userProfileMapper::toResponse)
-                .collect(java.util.stream.Collectors.toList());
+                .collect(Collectors.toList());
     }
 }

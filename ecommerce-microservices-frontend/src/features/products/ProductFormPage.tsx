@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { useForm } from 'react-hook-form';

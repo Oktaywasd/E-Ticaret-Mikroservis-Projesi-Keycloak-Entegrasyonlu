@@ -3,7 +3,9 @@ import { ArrowRight, Zap, Shield, Star, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ProductCard } from './ProductCard';
 import { ProductCardSkeleton } from '@/components/ui/skeleton';
-import { useProducts, useCategories } from './useProductQueries';
+import { useProducts } from './useProductQueries';
+import { useCategories } from '@/hooks/useCacheQueries';
+import { FeaturedProductsSection } from '@/components/home/FeaturedProductsSection';
 
 export function HomePage() {
   const { data: featuredData, isLoading: loadingProducts } = useProducts({
@@ -73,6 +75,9 @@ export function HomePage() {
         </div>
       </section>
 
+      {/* ── Featured & Popular ──────────────────────────── */}
+      <FeaturedProductsSection />
+
       {/* ── Features ─────────────────────────────────────── */}
       <section className="py-12 px-4 bg-background border-b border-border/40">
         <div className="container mx-auto">
@@ -112,7 +117,7 @@ export function HomePage() {
                 ? Array.from({ length: 6 }).map((_, i) => (
                     <div key={i} className="h-20 rounded-xl bg-muted animate-pulse" />
                   ))
-                : categories?.slice(0, 6).map((cat) => (
+                : categories?.map((cat) => (
                     <Link
                       key={cat.id}
                       to={`/products?categoryId=${cat.id}`}

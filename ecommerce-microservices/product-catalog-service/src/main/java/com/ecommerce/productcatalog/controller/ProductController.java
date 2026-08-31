@@ -23,16 +23,53 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/products")
 @RequiredArgsConstructor
-@Tag(name = "Product Management", description = "Ürün CRUD, filtreleme ve sayfalama API'leri")
+@Tag(name = "Product Management", description = "Ürün CRUD, filtreleme, sayfalama ve Redis Cache API'leri")
 public class ProductController {
 
     private final ProductService productService;
 
+    // ==========================================
+    // REDIS CACHE ENDPOINTS
+    // ==========================================
+
+    @GetMapping("/top")
+    @Operation(summary = "En Çok Satılan / Popüler 10 Ürün (Redis Cached)", description = "Saatte bir güncellenen veya ilk istekte cache'lenen top 10 ürünü getirir.")
+    public ResponseEntity<List<ProductResponse>> getTop10Products() {
+        return ResponseEntity.ok(productService.getTopProducts(10));
+    }
+
+    @GetMapping("/top-50")
+    @Operation(summary = "En Popüler 50 Ürün (Redis Cached)", description = "6 saatte bir güncellenen veya ilk istekte cache'lenen top 50 ürünü getirir.")
+    public ResponseEntity<List<ProductResponse>> getTop50Products() {
+        return ResponseEntity.ok(productService.getTopProducts(50));
+    }
+
+    @GetMapping("/admin/cache-status")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @Operation(summary = "Cache Durumunu Sorgula", description = "Admin paneli için Redis cache doluluk ve kalan TTL bilgilerini döner.")
+    public ResponseEntity<Map<String, Object>> getCacheStatus() {
+        return ResponseEntity.ok(productService.getCacheStatus());
+    }
+
+    @DeleteMapping("/admin/cache/clear")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
+    @Operation(summary = "Ürün Cache'lerini Manuel Temizle", description = "Admin tarafından Redis ürün cache'lerini anında temizler.")
+    public ResponseEntity<Void> clearCache() {
+        productService.clearProductCaches();
+        return ResponseEntity.noContent().build();
+    }
+
+    // ==========================================
+    // EXISTING PRODUCT ENDPOINTS
+    // ==========================================
+
     @PostMapping
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_SELLER')")
     @Operation(summary = "Yeni Ürün Oluştur", description = "Sisteme yeni bir ürün kaydeder.")
     public ResponseEntity<ProductResponse> createProduct(@Valid @RequestBody ProductCreateRequest request) {
         ProductResponse response = productService.createProduct(request);
@@ -60,7 +97,6 @@ public class ProductController {
             @RequestParam(defaultValue = "createdDate") String sortBy,
             @RequestParam(defaultValue = "DESC") String sortDirection
     ) {
-        // Nested alan kontrolü: Eğer "price" gelirse MongoDB için "price.sellingPrice" yap
         String actualSortBy = "price".equalsIgnoreCase(sortBy) ? "price.sellingPrice" : sortBy;
         Sort sort = sortDirection.equalsIgnoreCase("ASC") ? Sort.by(actualSortBy).ascending() : Sort.by(actualSortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
@@ -108,6 +144,7 @@ public class ProductController {
     }
 
     @PatchMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_SELLER')")
     @Operation(summary = "Ürün Güncelle", description = "Mevcut ürün verilerini günceller.")
     public ResponseEntity<ProductResponse> updateProduct(
             @PathVariable("id") String id,
@@ -147,6 +184,14 @@ public class ProductController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/{id}/record-sale")
+    public ResponseEntity<Void> recordSale(
+            @PathVariable String id,
+            @RequestParam(defaultValue = "1") int quantity) {
+        productService.updateProductSalesAndScore(id, quantity);
+        return ResponseEntity.ok().build();
+    }
+
     @GetMapping("/suggestions")
     @Operation(summary = "Hızlı Arama Önerileri (Autocomplete)", description = "Header arama kutusu için anlık hafif ürün listesi döner.")
     public ResponseEntity<List<ProductSearchSuggestionResponse>> getSuggestions(
@@ -164,6 +209,7 @@ public class ProductController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_SELLER')")
     @Operation(summary = "Ürün Sil (Soft Delete)", description = "Ürünü veritabanından tamamen silmez, isDeleted alanını true yapar.")
     public ResponseEntity<Void> deleteProduct(@PathVariable("id") String id) {
         productService.deleteProduct(id);

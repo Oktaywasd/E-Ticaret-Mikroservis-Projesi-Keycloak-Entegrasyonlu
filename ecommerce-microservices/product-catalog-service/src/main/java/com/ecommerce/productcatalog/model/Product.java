@@ -7,6 +7,8 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.Field;
+
 import java.util.ArrayList;
 
 import java.time.LocalDateTime;
@@ -50,4 +52,10 @@ public class Product {
 
     private LocalDateTime createdDate;
     private LocalDateTime updatedDate;
+
+    @Field("sales_count")
+    private Integer salesCount = 0;
+
+    @Field("popularity_score")
+    private Double popularityScore = 0.0;
 }

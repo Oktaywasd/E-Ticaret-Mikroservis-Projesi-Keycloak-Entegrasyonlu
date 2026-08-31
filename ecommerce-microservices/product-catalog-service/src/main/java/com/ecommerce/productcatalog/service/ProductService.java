@@ -11,9 +11,11 @@ import com.ecommerce.productcatalog.mapper.ProductMapper;
 import com.ecommerce.productcatalog.model.Product;
 import com.ecommerce.productcatalog.repository.CategoryRepository;
 import com.ecommerce.productcatalog.repository.ProductRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.bson.types.Decimal128;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -27,9 +29,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -42,30 +42,119 @@ public class ProductService {
     private final ProductMapper productMapper;
     private final FileStorageService fileStorageService;
     private final MongoTemplate mongoTemplate;
+    private final CacheService cacheService;
+    private final ObjectMapper objectMapper;
 
-    // 0. Dinamik Filtreleme ve Sayfalama (Server-Side)
+    private static final String CACHE_TOP_PRODUCTS = "cache:top_products";
+    private static final String CACHE_TOP_50_PRODUCTS = "cache:top_50_products";
+
+    @Value("${app.cache.top-products-ttl:3600}")
+    private long topProductsTtl;
+
+    @Value("${app.cache.top-50-products-ttl:21600}")
+    private long top50ProductsTtl;
+
+    // ==========================================
+    // REDIS CACHED PRODUCT FETCHING
+    // ==========================================
+
+    @Transactional(readOnly = true)
+    public List<ProductResponse> getTop10Products() {
+        Object cachedData = cacheService.get(CACHE_TOP_PRODUCTS);
+        if (cachedData != null) {
+            try {
+                return objectMapper.convertValue(cachedData, new TypeReference<List<ProductResponse>>() {});
+            } catch (Exception e) {
+                log.warn("Cache deserialization hatası (Top 10): {}", e.getMessage());
+            }
+        }
+
+        List<Product> products = productRepository.findTop10ByIsActiveTrueAndIsDeletedFalseOrderByPopularityScoreDesc();
+        List<ProductResponse> responses = productMapper.toResponseList(products);
+
+        cacheService.set(CACHE_TOP_PRODUCTS, responses, topProductsTtl);
+        return responses;
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProductResponse> getTop50Products() {
+        Object cachedData = cacheService.get(CACHE_TOP_50_PRODUCTS);
+        if (cachedData != null) {
+            try {
+                return objectMapper.convertValue(cachedData, new TypeReference<List<ProductResponse>>() {});
+            } catch (Exception e) {
+                log.warn("Cache deserialization hatası (Top 50): {}", e.getMessage());
+            }
+        }
+
+        List<Product> products = productRepository.findTop50ByIsActiveTrueAndIsDeletedFalseOrderByPopularityScoreDesc();
+        List<ProductResponse> responses = productMapper.toResponseList(products);
+
+        cacheService.set(CACHE_TOP_50_PRODUCTS, responses, top50ProductsTtl);
+        return responses;
+    }
+
+    public List<ProductResponse> getTopProducts(int limit) {
+        return limit <= 10 ? getTop10Products() : getTop50Products();
+    }
+
+    public void clearProductCaches() {
+        cacheService.delete(CACHE_TOP_PRODUCTS);
+        cacheService.delete(CACHE_TOP_50_PRODUCTS);
+        log.info("Tüm ürün cache'leri temizlendi.");
+    }
+
+    public Map<String, Object> getCacheStatus() {
+        Map<String, Object> status = new HashMap<>();
+        status.put("top10Cached", cacheService.get(CACHE_TOP_PRODUCTS) != null);
+        status.put("top10TtlRemaining", cacheService.getTtl(CACHE_TOP_PRODUCTS));
+        status.put("top50Cached", cacheService.get(CACHE_TOP_50_PRODUCTS) != null);
+        status.put("top50TtlRemaining", cacheService.getTtl(CACHE_TOP_50_PRODUCTS));
+        return status;
+    }
+
+    /**
+     * Sipariş tamamlandığında satış adedini ve popülerlik skorunu günceller.
+     */
+    @Transactional
+    public void updateProductSalesAndScore(String productId, int quantitySold) {
+        Product product = productRepository.findById(productId)
+                .orElseThrow(() -> new ResourceNotFoundException("Ürün bulunamadı: " + productId));
+
+        int newSales = (product.getSalesCount() != null ? product.getSalesCount() : 0) + quantitySold;
+        product.setSalesCount(newSales);
+
+        double rating = product.getRatingAverage() != null ? product.getRatingAverage() : 0.0;
+        int reviews = product.getReviewCount() != null ? product.getReviewCount() : 0;
+        double newScore = (newSales * 10.0) + (rating * 5.0) + (reviews * 2.0);
+
+        product.setPopularityScore(newScore);
+        product.setUpdatedDate(LocalDateTime.now());
+        productRepository.save(product);
+
+        clearProductCaches();
+    }
+
+    // ==========================================
+    // EXISTING PRODUCT CRUD & LOGIC
+    // ==========================================
+
     public Page<ProductResponse> getFilteredProducts(ProductFilterRequest filter, Pageable pageable) {
         Query query = new Query();
-
-        // 0.1. Silinmemiş Ürünler (Zorunlu)
         query.addCriteria(Criteria.where("isDeleted").ne(true));
 
-        // 0.2. Aktiflik Durumu: Admin isteği değilse (includeInactive != true) sadece aktif ürünleri getir
         if (!Boolean.TRUE.equals(filter.getIncludeInactive())) {
             query.addCriteria(Criteria.where("isActive").ne(false));
         }
 
-        // 0.3. Kategori Filtresi
         if (filter.getCategoryId() != null && !filter.getCategoryId().isBlank()) {
             query.addCriteria(Criteria.where("categoryId").is(filter.getCategoryId().trim()));
         }
 
-        // 0.4. Marka Filtresi (Regex - Case Insensitive)
         if (filter.getBrand() != null && !filter.getBrand().isBlank()) {
             query.addCriteria(Criteria.where("brand").regex(filter.getBrand().trim(), "i"));
         }
 
-        // 0.5. İsim veya Marka Arama
         if (filter.getSearch() != null && !filter.getSearch().isBlank()) {
             String searchRegex = filter.getSearch().trim();
             query.addCriteria(new Criteria().orOperator(
@@ -76,8 +165,8 @@ public class ProductService {
 
         if (filter.getMinPrice() != null && filter.getMaxPrice() != null) {
             query.addCriteria(Criteria.where("price.sellingPrice")
-                    .gte(filter.getMinPrice().doubleValue())  // <-- Double gönderiliyor
-                    .lte(filter.getMaxPrice().doubleValue())); // <-- Double gönderiliyor
+                    .gte(filter.getMinPrice().doubleValue())
+                    .lte(filter.getMaxPrice().doubleValue()));
         } else if (filter.getMinPrice() != null) {
             query.addCriteria(Criteria.where("price.sellingPrice")
                     .gte(filter.getMinPrice().doubleValue()));
@@ -87,7 +176,6 @@ public class ProductService {
         }
 
         long total = mongoTemplate.count(query, Product.class);
-
         query.with(pageable);
         List<Product> products = mongoTemplate.find(query, Product.class);
 
@@ -98,7 +186,6 @@ public class ProductService {
         return new PageImpl<>(responses, pageable, total);
     }
 
-    // 1. Ürün Oluşturma
     public ProductResponse createProduct(ProductCreateRequest request) {
         if (productRepository.existsByProductCodeAndIsDeletedFalse(request.getProductCode())) {
             throw new AlreadyExistsException("Bu ürün kodu ile aktif bir ürün zaten var: " + request.getProductCode());
@@ -111,26 +198,26 @@ public class ProductService {
         Product product = productMapper.toEntity(request);
         product.setIsDeleted(false);
         product.setIsActive(true);
+        product.setSalesCount(0);
+        product.setPopularityScore(0.0);
         product.setCreatedDate(LocalDateTime.now());
         product.setUpdatedDate(LocalDateTime.now());
 
         Product savedProduct = productRepository.save(product);
+        clearProductCaches();
         return productMapper.toResponse(savedProduct);
     }
 
-    // 2. ID ile Ürün Getirme
     public ProductResponse getProductById(String id) {
         Product product = findActiveProductById(id);
         return productMapper.toResponse(product);
     }
 
-    // 3. Tüm Ürünleri Sayfalamalı Listeleme (Admin ve genel kullanım)
     public Page<ProductResponse> getAllProducts(Pageable pageable) {
         Page<Product> products = productRepository.findAllByIsDeletedFalse(pageable);
         return products.map(productMapper::toResponse);
     }
 
-    // 4. Kategoriye Göre Ürün Listeleme
     public Page<ProductResponse> getProductsByCategoryId(String categoryId, Pageable pageable) {
         if (!categoryRepository.existsById(categoryId)) {
             throw new ResourceNotFoundException("Kategori bulunamadı: " + categoryId);
@@ -139,7 +226,6 @@ public class ProductService {
         return products.map(productMapper::toResponse);
     }
 
-    // 5. Ürün Güncelleme
     public ProductResponse updateProduct(String id, ProductUpdateRequest request) {
         Product existingProduct = findActiveProductById(id);
 
@@ -151,10 +237,10 @@ public class ProductService {
         updatedProduct.setUpdatedDate(LocalDateTime.now());
 
         Product savedProduct = productRepository.save(updatedProduct);
+        clearProductCaches();
         return productMapper.toResponse(savedProduct);
     }
 
-    // 6. Stok Düşürme (GÜVENLİ VE LOGLU HALE GETİRİLDİ)
     @Transactional
     public void reduceStock(String id, Integer quantity) {
         log.info("Attempting to reduce stock for product ID: {} by quantity: {}", id, quantity);
@@ -179,13 +265,25 @@ public class ProductService {
 
         int newStock = currentStock - quantity;
         product.getStock().setCurrentStock(newStock);
-        product.setUpdatedDate(LocalDateTime.now());
 
+        // Satış adedini ve popülerlik skorunu eşzamanlı artır
+        int currentSales = product.getSalesCount() != null ? product.getSalesCount() : 0;
+        int updatedSales = currentSales + quantity;
+        product.setSalesCount(updatedSales);
+
+        double rating = product.getRatingAverage() != null ? product.getRatingAverage() : 0.0;
+        int reviews = product.getReviewCount() != null ? product.getReviewCount() : 0;
+        double newScore = (updatedSales * 10.0) + (rating * 5.0) + (reviews * 2.0);
+        product.setPopularityScore(newScore);
+
+        product.setUpdatedDate(LocalDateTime.now());
         productRepository.save(product);
-        log.info("Stock reduced successfully for product {}. Quantity: {}, New Stock: {}", id, quantity, newStock);
+
+        clearProductCaches();
+        log.info("Stock reduced and sales updated. Product: {}, New Stock: {}, Sales: {}, Score: {}",
+                id, newStock, updatedSales, newScore);
     }
 
-    // 6.1 Sipariş İptalinde Stok İade Etme (GÜVENLİ VE LOGLU)
     @Transactional
     public void restoreStock(String id, Integer quantity) {
         log.info("Attempting to restore stock for product ID: {} by quantity: {}", id, quantity);
@@ -210,19 +308,19 @@ public class ProductService {
         product.setUpdatedDate(LocalDateTime.now());
 
         productRepository.save(product);
+        clearProductCaches();
         log.info("Stock restored successfully for product {}. Added: {}, New Stock: {}", id, quantity, newStock);
     }
 
-    // 7. Ürün Silme (Soft Delete)
     public void deleteProduct(String id) {
         Product product = findActiveProductById(id);
 
         product.setIsDeleted(true);
         product.setUpdatedDate(LocalDateTime.now());
         productRepository.save(product);
+        clearProductCaches();
     }
 
-    // 8. Görsel Ekleme
     public ProductResponse addImagesToProduct(String productId, List<MultipartFile> files) {
         Product product = findActiveProductById(productId);
 
@@ -238,10 +336,10 @@ public class ProductService {
         }
 
         Product updatedProduct = productRepository.save(product);
+        clearProductCaches();
         return productMapper.toResponse(updatedProduct);
     }
 
-    // 9. Anlık Arama Önerileri (Autocomplete)
     public List<ProductSearchSuggestionResponse> getSearchSuggestions(String query, int limit) {
         if (query == null || query.trim().length() < 2) {
             return Collections.emptyList();
@@ -268,7 +366,6 @@ public class ProductService {
                 .collect(Collectors.toList());
     }
 
-    // 10. Admin Ürün Aktif/Pasif Durum Değiştirme (Toggle Status)
     public ProductResponse toggleProductStatus(String id) {
         Product product = findActiveProductById(id);
 
@@ -277,11 +374,11 @@ public class ProductService {
         product.setUpdatedDate(LocalDateTime.now());
 
         Product savedProduct = productRepository.save(product);
+        clearProductCaches();
         log.info("Product ID: {} status toggled. New isActive state: {}", id, product.getIsActive());
         return productMapper.toResponse(savedProduct);
     }
 
-    // Yardımcı Metod: Ürünü bul, yoksa genel findById dene
     private Product findActiveProductById(String id) {
         return productRepository.findByIdAndIsDeletedFalse(id)
                 .orElseGet(() -> productRepository.findById(id)

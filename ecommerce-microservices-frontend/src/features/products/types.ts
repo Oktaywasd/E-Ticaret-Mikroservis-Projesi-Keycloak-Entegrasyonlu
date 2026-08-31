@@ -43,6 +43,7 @@ export interface Product {
   imageUrls?: string[];
   ratingAverage?: number;
   reviewCount?: number;
+  salesCount?: number;
   variants?: ProductVariant[];
   isActive?: boolean;
   active?: boolean; // fallback

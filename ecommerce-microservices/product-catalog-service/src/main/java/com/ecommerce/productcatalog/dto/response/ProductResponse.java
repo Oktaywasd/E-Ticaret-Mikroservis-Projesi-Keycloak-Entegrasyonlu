@@ -39,4 +39,7 @@ public class ProductResponse {
 
     private LocalDateTime createdDate;
     private LocalDateTime updatedDate;
+
+    private Integer salesCount;
+    private Double popularityScore;
 }

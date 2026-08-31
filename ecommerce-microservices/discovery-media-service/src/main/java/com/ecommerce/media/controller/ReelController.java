@@ -125,6 +125,14 @@ public class ReelController {
         return ResponseEntity.noContent().build();
     }
 
+    @DeleteMapping("/admin/cache/clear")
+    @SecurityRequirement(name = "bearerAuth")
+    @Operation(summary = "Reels Feed Cache'ini Temizle (Admin)")
+    public ResponseEntity<Void> clearCache() {
+        reelService.clearReelsFeedCache();
+        return ResponseEntity.noContent().build();
+    }
+
     private String extractFullName(Jwt jwt) {
         if (jwt == null) {
             return "Anonim Kullanıcı";

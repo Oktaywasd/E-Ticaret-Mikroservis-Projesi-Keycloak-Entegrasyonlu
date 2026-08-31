@@ -8,14 +8,14 @@ import com.ecommerce.productcatalog.model.Product;
 import com.ecommerce.productcatalog.model.Review;
 import com.ecommerce.productcatalog.repository.ProductRepository;
 import com.ecommerce.productcatalog.repository.ReviewRepository;
+import com.ecommerce.productcatalog.service.CacheService;
 import com.ecommerce.productcatalog.service.impl.ReviewServiceImpl;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.MockitoAnnotations;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.http.HttpMessageConvertersAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,7 +24,6 @@ import org.springframework.cloud.openfeign.FeignAutoConfiguration;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.TestPropertySource;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 import java.util.Optional;
 
@@ -56,6 +55,9 @@ class OrderClientIntegrationTest {
     @Mock
     private ReviewRepository reviewRepository;
 
+    @Mock
+    private CacheService cacheService;
+
     private ReviewServiceImpl reviewService;
 
     private final String PRODUCT_ID = "prod_999";
@@ -79,9 +81,10 @@ class OrderClientIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        MockitoAnnotations.openMocks(this);
         wireMockServer.resetAll();
 
-        reviewService = new ReviewServiceImpl(reviewRepository, productRepository, orderClient);
+        reviewService = new ReviewServiceImpl(reviewRepository, productRepository, orderClient, cacheService);
 
         testProduct = Product.builder()
                 .id(PRODUCT_ID)
@@ -89,6 +92,8 @@ class OrderClientIntegrationTest {
                 .isDeleted(false)
                 .ratingAverage(4.0)
                 .reviewCount(1)
+                .salesCount(0)
+                .popularityScore(20.0)
                 .build();
 
         reviewRequest = new ReviewCreateRequest();
@@ -124,6 +129,8 @@ class OrderClientIntegrationTest {
 
         verify(productRepository, times(1)).save(testProduct);
         verify(reviewRepository, times(1)).save(any(Review.class));
+        verify(cacheService, times(1)).delete("cache:top_products");
+        verify(cacheService, times(1)).delete("cache:top_50_products");
     }
 
     @Test
@@ -143,6 +150,7 @@ class OrderClientIntegrationTest {
 
         assertTrue(exception.getMessage().contains("Yalnızca ürünü sipariş etmiş olan kullanıcılar"));
         verify(reviewRepository, never()).save(any());
+        verify(cacheService, never()).delete(anyString());
     }
 
     @Test
@@ -159,5 +167,6 @@ class OrderClientIntegrationTest {
 
         assertTrue(exception.getMessage().contains("Sipariş geçmişi doğrulanırken bir hata oluştu"));
         verify(reviewRepository, never()).save(any());
+        verify(cacheService, never()).delete(anyString());
     }
 }

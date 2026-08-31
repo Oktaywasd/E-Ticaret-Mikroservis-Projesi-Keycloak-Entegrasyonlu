@@ -13,7 +13,8 @@ import { DeleteConfirmModal } from '@/components/ui/delete-confirm-modal';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
 } from '@/components/ui/dialog';
-import { useCategories, useCreateCategory, useUpdateCategory, useDeleteCategory } from './useProductQueries';
+import { useCreateCategory, useUpdateCategory, useDeleteCategory } from './useProductQueries';
+import { useCategories } from '@/hooks/useCacheQueries';
 import type { Category } from './types';
 
 const categorySchema = z.object({

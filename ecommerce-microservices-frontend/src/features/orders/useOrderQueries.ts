@@ -42,8 +42,14 @@ export function useCreateOrder() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: CreateOrderRequest) => createOrder(payload),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: orderKeys.myOrders() });
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: orderKeys.myOrders() });
+      // Ürün detay, ürün listesi ve vitrin sorgularını anında geçersiz kıl ve yeniden çek
+      await qc.invalidateQueries({ queryKey: ['products'] });
+      await qc.invalidateQueries({ queryKey: ['product'] });
+      await qc.invalidateQueries({ queryKey: ['top-products'] });
+      await qc.invalidateQueries({ queryKey: ['top-50-products'] });
+      await qc.refetchQueries({ queryKey: ['product'] });
     },
   });
 }

@@ -48,12 +48,23 @@ public class OrderServiceImpl implements OrderService {
         for (OrderItemRequestDto itemDto : requestDto.getItems()) {
             ProductResponseDto product = productCatalogClient.getProductById(itemDto.getProductId());
 
-            if (product.getCurrentStockCount() < itemDto.getQuantity()) {
-                throw new BusinessException("Insufficient stock for product: " + product.getName() +
-                        ". Available stock: " + product.getCurrentStockCount());
+            if (product == null) {
+                throw new ResourceNotFoundException("Product not found with id: " + itemDto.getProductId());
             }
 
+            int currentStock = product.getCurrentStockCount() != null ? product.getCurrentStockCount() : 0;
+            if (currentStock < itemDto.getQuantity()) {
+                throw new BusinessException("Insufficient stock for product: " + product.getName() +
+                        ". Available stock: " + currentStock);
+            }
+
+            // Null-safety: EffectivePrice null ise varsayılan fiyat veya 0 al
             BigDecimal unitPrice = product.getEffectivePrice();
+            if (unitPrice == null) {
+                log.warn("Effective price is null for product: {}. Fallback to ZERO.", product.getId());
+                unitPrice = BigDecimal.ZERO;
+            }
+
             BigDecimal itemTotal = unitPrice.multiply(BigDecimal.valueOf(itemDto.getQuantity()));
             grandTotal = grandTotal.add(itemTotal);
 

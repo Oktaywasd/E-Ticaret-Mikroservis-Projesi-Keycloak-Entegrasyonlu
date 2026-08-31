@@ -26,4 +26,9 @@ public interface ProductRepository extends MongoRepository<Product, String> {
 
     List<Product> findByNameContainingIgnoreCaseOrBrandContainingIgnoreCaseAndIsDeletedFalse(String name, String brand, org.springframework.data.domain.Pageable pageable);
 
+    // Popülerlik skoruna göre Top 10 (Sipariş + Puan ağırlıklı)
+    List<Product> findTop10ByIsActiveTrueAndIsDeletedFalseOrderByPopularityScoreDesc();
+
+    // Popülerlik skoruna göre Top 50 (Trendler)
+    List<Product> findTop50ByIsActiveTrueAndIsDeletedFalseOrderByPopularityScoreDesc();
 }

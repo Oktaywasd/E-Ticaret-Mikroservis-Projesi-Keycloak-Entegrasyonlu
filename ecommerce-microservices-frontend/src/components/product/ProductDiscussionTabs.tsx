@@ -92,6 +92,11 @@ export function ProductDiscussionTabs({ productId }: ProductDiscussionTabsProps)
   const handleReviewSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ['reviews', productId] });
     queryClient.invalidateQueries({ queryKey: ['product', productId] }); // Update avg rating in product detail
+    // Yorum sonrası vitrinleri ve listeleri anında tetikle
+    queryClient.invalidateQueries({ queryKey: ['top-products'] });
+    queryClient.invalidateQueries({ queryKey: ['top-50-products'] });
+    queryClient.invalidateQueries({ queryKey: ['products'] });
+    queryClient.invalidateQueries({ queryKey: ['product'] });
   };
 
   return (

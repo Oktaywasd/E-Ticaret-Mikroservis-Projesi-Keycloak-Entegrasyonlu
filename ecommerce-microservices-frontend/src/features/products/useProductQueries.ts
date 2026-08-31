@@ -21,7 +21,7 @@ export const productKeys = {
   list: (params: ProductQueryParams) => [...productKeys.lists(), params] as const,
   details: () => [...productKeys.all, 'detail'] as const,
   detail: (id: string) => [...productKeys.details(), id] as const,
-  categories: ['categories'] as const,
+  categories: ['categories', 'all'] as const,
 };
 
 // ─── Query Hooks ──────────────────────────────────────────────────────────────
@@ -41,16 +41,13 @@ export function useProduct(id: string) {
     queryKey: productKeys.detail(id),
     queryFn: () => fetchProductById(id),
     enabled: !!id && /^[0-9a-fA-F]{24}$/.test(id),
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchOnMount: 'always',
   });
 }
 
-export function useCategories() {
-  return useQuery({
-    queryKey: productKeys.categories,
-    queryFn: fetchCategories,
-    staleTime: 1000 * 60 * 10, // categories change rarely
-  });
-}
+export { useCategories } from '@/hooks/useCacheQueries';
 
 // ─── Mutation Hooks ───────────────────────────────────────────────────────────
 
@@ -110,8 +107,9 @@ export function useCreateCategory() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (payload: CreateCategoryRequest) => createCategory(payload),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: productKeys.categories });
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['categories'] });
+      await qc.refetchQueries({ queryKey: ['categories'] });
     },
   });
 }
@@ -121,8 +119,9 @@ export function useUpdateCategory() {
   return useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: CreateCategoryRequest }) =>
       updateCategory(id, payload),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: productKeys.categories });
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['categories'] });
+      await qc.refetchQueries({ queryKey: ['categories'] });
     },
   });
 }
@@ -131,8 +130,9 @@ export function useDeleteCategory() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => deleteCategory(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: productKeys.categories });
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['categories'] });
+      await qc.refetchQueries({ queryKey: ['categories'] });
     },
   });
 }

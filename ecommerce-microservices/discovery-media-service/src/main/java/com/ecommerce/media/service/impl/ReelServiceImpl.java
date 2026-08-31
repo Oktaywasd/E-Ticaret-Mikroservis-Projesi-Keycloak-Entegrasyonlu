@@ -4,22 +4,26 @@ import com.ecommerce.media.client.OrderClient;
 import com.ecommerce.media.client.ProductCatalogClient;
 import com.ecommerce.media.dto.request.CreateCommentRequest;
 import com.ecommerce.media.dto.request.CreateReelRequest;
+import com.ecommerce.media.dto.response.CachedReelFeedResponse;
 import com.ecommerce.media.dto.response.ProductSummaryResponse;
 import com.ecommerce.media.dto.response.ReelCommentResponse;
 import com.ecommerce.media.dto.response.ReelResponse;
 import com.ecommerce.media.exception.ResourceNotFoundException;
 import com.ecommerce.media.model.Reel;
 import com.ecommerce.media.model.ReelComment;
-
 import com.ecommerce.media.repository.ReelCommentRepository;
 import com.ecommerce.media.repository.ReelRepository;
+import com.ecommerce.media.service.CacheService;
 import com.ecommerce.media.service.FileStorageService;
 import com.ecommerce.media.service.ReelService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -38,7 +42,13 @@ public class ReelServiceImpl implements ReelService {
     private final FileStorageService fileStorageService;
     private final ProductCatalogClient productCatalogClient;
     private final OrderClient orderClient;
-    private final MongoTemplate mongoTemplate;
+    private final CacheService cacheService;
+    private final ObjectMapper objectMapper;
+
+    private static final String CACHE_REELS_FEED_PREFIX = "cache:reels:feed:";
+
+    @Value("${app.cache.reels-feed-ttl:1800}")
+    private long reelsFeedTtl;
 
     @Override
     public ReelResponse uploadReel(CreateReelRequest request, MultipartFile videoFile, MultipartFile thumbnailFile, String sellerId) {
@@ -70,11 +80,41 @@ public class ReelServiceImpl implements ReelService {
                 .build();
 
         Reel savedReel = reelRepository.save(reel);
+        clearReelsFeedCache(); // Yeni video yüklendiğinde feed cache temizlenir
         return mapToReelResponse(savedReel, productSummary, 0L);
     }
 
     @Override
     public Page<ReelResponse> getReelsFeed(Pageable pageable) {
+        String cacheKey = CACHE_REELS_FEED_PREFIX + "page_" + pageable.getPageNumber() + "_size_" + pageable.getPageSize();
+
+        Object cachedData = cacheService.get(cacheKey);
+        if (cachedData != null) {
+            try {
+                CachedReelFeedResponse cachedFeed = objectMapper.convertValue(cachedData, CachedReelFeedResponse.class);
+                return new PageImpl<>(cachedFeed.getContent(), pageable, cachedFeed.getTotalElements());
+            } catch (Exception e) {
+                log.warn("Reels feed cache deserialize edilemedi, DB'den çekiliyor: {}", e.getMessage());
+            }
+        }
+
+        Page<ReelResponse> feedPage = fetchReelsFeedFromDb(pageable);
+
+        CachedReelFeedResponse toCache = CachedReelFeedResponse.builder()
+                .content(feedPage.getContent())
+                .pageNumber(feedPage.getNumber())
+                .pageSize(feedPage.getSize())
+                .totalElements(feedPage.getTotalElements())
+                .totalPages(feedPage.getTotalPages())
+                .last(feedPage.isLast())
+                .build();
+
+        cacheService.set(cacheKey, toCache, reelsFeedTtl);
+        return feedPage;
+    }
+
+    @Override
+    public Page<ReelResponse> fetchReelsFeedFromDb(Pageable pageable) {
         return reelRepository.findAllByStatus("ACTIVE", pageable)
                 .map(reel -> {
                     ProductSummaryResponse summary = fetchProductSummarySafe(reel.getProductId());
@@ -191,6 +231,13 @@ public class ReelServiceImpl implements ReelService {
 
         commentRepository.deleteAllByReelId(id);
         reelRepository.delete(reel);
+        clearReelsFeedCache(); // Silindiğinde feed cache temizlenir
+    }
+
+    @Override
+    public void clearReelsFeedCache() {
+        cacheService.deleteByPattern(CACHE_REELS_FEED_PREFIX + "*");
+        log.info("Tüm Reels feed sayfaları cache'ten silindi.");
     }
 
     private ProductSummaryResponse fetchProductSummarySafe(String productId) {

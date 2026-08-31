@@ -11,6 +11,7 @@ import com.ecommerce.productcatalog.model.Product;
 import com.ecommerce.productcatalog.model.Review;
 import com.ecommerce.productcatalog.repository.ProductRepository;
 import com.ecommerce.productcatalog.repository.ReviewRepository;
+import com.ecommerce.productcatalog.service.CacheService;
 import com.ecommerce.productcatalog.service.ReviewService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,10 @@ public class ReviewServiceImpl implements ReviewService {
     private final ReviewRepository reviewRepository;
     private final ProductRepository productRepository;
     private final OrderClient orderClient;
+    private final CacheService cacheService;
+
+    private static final String CACHE_TOP_PRODUCTS = "cache:top_products";
+    private static final String CACHE_TOP_50_PRODUCTS = "cache:top_50_products";
 
     @Override
     @Transactional
@@ -61,7 +66,7 @@ public class ReviewServiceImpl implements ReviewService {
 
         Review savedReview = reviewRepository.save(review);
 
-        // 3. Ürün Puan Ortalaması ve Değerlendirme Sayısını Güncelleme
+        // 3. Ürün Puan Ortalaması, Değerlendirme Sayısı, Popülerlik Skoru ve Cache Invalidation
         updateProductRating(product, request.getRating());
 
         return toReviewResponse(savedReview);
@@ -69,7 +74,7 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     public ReviewResponse createQuestion(String productId, QuestionCreateRequest request, String userId, String userName) {
-        findActiveProduct(productId); // Ürün var mı kontrolü
+        findActiveProduct(productId);
 
         Review question = Review.builder()
                 .productId(productId)
@@ -119,7 +124,7 @@ public class ReviewServiceImpl implements ReviewService {
                 .toList();
     }
 
-    // Ürün Ortalama Puanını Dinamik Güncelleyen Metod
+    // Ürün Ortalama Puanını ve Popülerlik Skorunu Dinamik Güncelleyen & Cache Temizleyen Metod
     private void updateProductRating(Product product, Integer newRating) {
         int oldCount = product.getReviewCount() != null ? product.getReviewCount() : 0;
         double oldAvg = product.getRatingAverage() != null ? product.getRatingAverage() : 0.0;
@@ -127,16 +132,26 @@ public class ReviewServiceImpl implements ReviewService {
         int newCount = oldCount + 1;
         double newAvg = ((oldAvg * oldCount) + newRating) / newCount;
 
-        // 1 ondalık basamağa yuvarla (Örn: 4.5)
+        // 1 ondalık basamağa yuvarla (Örn: 4.8)
         newAvg = Math.round(newAvg * 10.0) / 10.0;
 
         product.setReviewCount(newCount);
         product.setRatingAverage(newAvg);
         product.setUpdatedDate(LocalDateTime.now());
 
+        // Popülerlik skoru güncelle: (Satış * 10) + (Ort. Puan * 5) + (Yorum * 2)
+        int sales = product.getSalesCount() != null ? product.getSalesCount() : 0;
+        double popScore = (sales * 10.0) + (newAvg * 5.0) + (newCount * 2.0);
+        product.setPopularityScore(popScore);
+
         productRepository.save(product);
-        log.info("Ürün puanı güncellendi. ProductId: {}, Yeni Ortalama: {}, Toplam Değerlendirme: {}",
-                product.getId(), newAvg, newCount);
+
+        // Redis cache temizliği (Invalidation)
+        cacheService.delete(CACHE_TOP_PRODUCTS);
+        cacheService.delete(CACHE_TOP_50_PRODUCTS);
+
+        log.info("Ürün puanı ve skoru güncellendi. ProductId: {}, Yeni Ortalama: {}, Değerlendirme Sayısı: {}, Yeni Skor: {}",
+                product.getId(), newAvg, newCount, popScore);
     }
 
     private Product findActiveProduct(String productId) {
@@ -144,7 +159,6 @@ public class ReviewServiceImpl implements ReviewService {
                 .orElseThrow(() -> new ResourceNotFoundException("Ürün bulunamadı ID: " + productId));
     }
 
-    // Entity -> DTO Manuel Eşleme (İstenirse MapStruct'a da taşınabilir)
     private ReviewResponse toReviewResponse(Review review) {
         ReviewResponse.AdminReplyDto replyDto = null;
         if (review.getAdminReply() != null) {

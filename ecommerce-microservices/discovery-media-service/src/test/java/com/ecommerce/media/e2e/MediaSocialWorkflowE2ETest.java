@@ -10,8 +10,10 @@ import com.ecommerce.media.model.Reel;
 import com.ecommerce.media.model.ReelComment;
 import com.ecommerce.media.repository.ReelCommentRepository;
 import com.ecommerce.media.repository.ReelRepository;
+import com.ecommerce.media.service.CacheService;
 import com.ecommerce.media.service.FileStorageService;
 import com.ecommerce.media.service.impl.ReelServiceImpl;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
@@ -74,6 +76,12 @@ class MediaSocialWorkflowE2ETest {
 
     private static WireMockServer wireMockServer;
 
+    @Mock
+    private CacheService cacheService;
+
+    @Mock
+    private ObjectMapper objectMapper = new ObjectMapper();
+
     @Autowired
     private OrderClient orderClient;
 
@@ -124,7 +132,8 @@ class MediaSocialWorkflowE2ETest {
                 fileStorageService,
                 productCatalogClient,
                 orderClient,
-                mongoTemplate
+                cacheService,
+                objectMapper
         );
     }
 
