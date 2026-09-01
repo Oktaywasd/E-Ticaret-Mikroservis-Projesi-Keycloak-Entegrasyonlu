@@ -7,7 +7,6 @@ import com.ecommerce.order.dto.request.CreateOrderRequestDto;
 import com.ecommerce.order.dto.request.OrderItemRequestDto;
 import com.ecommerce.order.dto.response.OrderResponseDto;
 import com.ecommerce.order.exception.BusinessException;
-import com.ecommerce.order.exception.ResourceNotFoundException;
 import com.ecommerce.order.mapper.OrderMapper;
 import com.ecommerce.order.model.Order;
 import com.ecommerce.order.model.OrderItem;
@@ -30,6 +29,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -71,7 +71,6 @@ class OrderServiceTest {
         createOrderRequestDto.setAddressId("addr_456");
         createOrderRequestDto.setItems(List.of(itemRequestDto));
 
-        // ProductResponseDto Mock Nesnesi Hazırlama
         ProductResponseDto.PriceDto priceDto = ProductResponseDto.PriceDto.builder()
                 .sellingPrice(BigDecimal.valueOf(150.00))
                 .build();
@@ -131,22 +130,24 @@ class OrderServiceTest {
         // Assert
         assertThat(result).isNotNull();
         assertThat(result.getOrderCode()).isEqualTo("ORD-123456");
-        verify(productCatalogClient, times(1)).reduceStock(PRODUCT_ID, 2);
+        verify(crmClient, times(1)).getAddressById("addr_456");
+        verify(productCatalogClient, times(1)).getProductById(PRODUCT_ID);
         verify(orderRepository, times(1)).save(any(Order.class));
+        verify(productCatalogClient, times(1)).reduceStock(PRODUCT_ID, 2);
     }
 
     @Test
     @DisplayName("Yetersiz Stok: İstenen miktar mevcut stoktan fazlaysa BusinessException fırlatmalı")
     void createOrder_WhenInsufficientStock_ShouldThrowBusinessException() {
-        // Arrange (Mevcut stok: 1, İstenen: 2)
+        // Arrange
         productResponseDto.getStock().setCurrentStock(1);
         when(crmClient.getAddressById("addr_456")).thenReturn(null);
         when(productCatalogClient.getProductById(PRODUCT_ID)).thenReturn(productResponseDto);
 
         // Act & Assert
-        BusinessException exception = assertThrows(BusinessException.class, () -> {
-            orderService.createOrder(createOrderRequestDto, KEYCLOAK_USER_ID);
-        });
+        BusinessException exception = assertThrows(BusinessException.class, () ->
+                orderService.createOrder(createOrderRequestDto, KEYCLOAK_USER_ID)
+        );
 
         assertThat(exception.getMessage()).contains("Insufficient stock");
         verify(orderRepository, never()).save(any(Order.class));
@@ -160,9 +161,9 @@ class OrderServiceTest {
         when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
 
         // Act & Assert
-        assertThrows(BusinessException.class, () -> {
-            orderService.getOrderById(ORDER_ID, OTHER_USER_ID, false);
-        });
+        assertThrows(BusinessException.class, () ->
+                orderService.getOrderById(ORDER_ID, OTHER_USER_ID, false)
+        );
     }
 
     @Test
@@ -205,9 +206,9 @@ class OrderServiceTest {
         when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
 
         // Act & Assert
-        BusinessException exception = assertThrows(BusinessException.class, () -> {
-            orderService.cancelOrder(ORDER_ID, KEYCLOAK_USER_ID, false);
-        });
+        BusinessException exception = assertThrows(BusinessException.class, () ->
+                orderService.cancelOrder(ORDER_ID, KEYCLOAK_USER_ID, false)
+        );
 
         assertThat(exception.getMessage()).contains("Delivered orders cannot be cancelled");
         verify(productCatalogClient, never()).restoreStock(anyString(), anyInt());
@@ -221,9 +222,9 @@ class OrderServiceTest {
         when(orderRepository.findById(ORDER_ID)).thenReturn(Optional.of(order));
 
         // Act & Assert
-        assertThrows(BusinessException.class, () -> {
-            orderService.updateOrderStatus(ORDER_ID, OrderStatus.SHIPPED);
-        });
+        assertThrows(BusinessException.class, () ->
+                orderService.updateOrderStatus(ORDER_ID, OrderStatus.SHIPPED)
+        );
     }
 
     @Test
