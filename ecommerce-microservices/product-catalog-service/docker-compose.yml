@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # --- KEYCLOAK DATABASE ---
   keycloak-db:
     image: postgres:15-alpine
     container_name: keycloak-db
@@ -11,6 +12,7 @@ services:
     ports:
       - "5433:5432"
 
+  # --- KEYCLOAK IAM ---
   keycloak:
     image: quay.io/keycloak/keycloak:24.0.0
     container_name: keycloak
@@ -27,18 +29,36 @@ services:
     depends_on:
       - keycloak-db
 
-  # --- REDIS CACHE SERVICE ---
+  # --- RABBITMQ MESSAGE BROKER ---
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: ecommerce-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"     # AMQP protokol portu[cite: 6]
+      - "15672:15672"   # Web Management paneli[cite: 6]
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- REDIS CACHE LAYER ---
   redis:
     image: redis:7-alpine
     container_name: ecommerce-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     command: >
       redis-server 
       --maxmemory 512mb 
       --maxmemory-policy allkeys-lru 
       --appendonly yes
+    ports:
+      - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -48,5 +68,6 @@ services:
       retries: 5
 
 volumes:
+  rabbitmq_data:
   redis_data:
     driver: local

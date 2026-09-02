@@ -1,5 +1,7 @@
 package com.ecommerce.media.controller;
 
+import com.ecommerce.media.config.ReelsRabbitMqConfig;
+import com.ecommerce.media.dto.event.ReelsInteractionEvent;
 import com.ecommerce.media.dto.request.CreateCommentRequest;
 import com.ecommerce.media.dto.request.CreateReelRequest;
 import com.ecommerce.media.dto.response.ReelCommentResponse;
@@ -10,6 +12,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -20,6 +23,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -29,6 +33,7 @@ import java.util.List;
 public class ReelController {
 
     private final ReelService reelService;
+    private final RabbitTemplate rabbitTemplate;
 
     @GetMapping("/feed")
     @Operation(summary = "Get paginated reels feed (Public)")
@@ -68,24 +73,50 @@ public class ReelController {
     }
 
     @PostMapping("/{id}/view")
-    @Operation(summary = "Increment video view count atomically (Public)")
+    @Operation(summary = "Increment video view count asynchronously via RabbitMQ (Public)")
     public ResponseEntity<Void> incrementView(
             @PathVariable String id,
             @AuthenticationPrincipal Jwt jwt) {
-        String userId = (jwt != null) ? jwt.getSubject() : null;
-        reelService.incrementViewCount(id, userId);
-        return ResponseEntity.ok().build();
+        String userId = (jwt != null) ? jwt.getSubject() : "anonymous-user";
+
+        ReelsInteractionEvent event = ReelsInteractionEvent.builder()
+                .reelId(id)
+                .userId(userId)
+                .type(ReelsInteractionEvent.InteractionType.VIEW)
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        rabbitTemplate.convertAndSend(
+                ReelsRabbitMqConfig.REELS_EXCHANGE,
+                ReelsRabbitMqConfig.REELS_INTERACTION_ROUTING_KEY,
+                event
+        );
+
+        return ResponseEntity.accepted().build(); // 202 Accepted (Non-blocking)
     }
 
     @PostMapping("/{id}/like")
     @SecurityRequirement(name = "bearerAuth")
-    @Operation(summary = "Like a reel video (Customer)")
+    @Operation(summary = "Like a reel video asynchronously via RabbitMQ (Customer)")
     public ResponseEntity<Void> likeReel(
             @PathVariable String id,
             @AuthenticationPrincipal Jwt jwt) {
         String userId = (jwt != null) ? jwt.getSubject() : "anonymous-user";
-        reelService.toggleLikeReel(id, userId);
-        return ResponseEntity.ok().build();
+
+        ReelsInteractionEvent event = ReelsInteractionEvent.builder()
+                .reelId(id)
+                .userId(userId)
+                .type(ReelsInteractionEvent.InteractionType.LIKE)
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        rabbitTemplate.convertAndSend(
+                ReelsRabbitMqConfig.REELS_EXCHANGE,
+                ReelsRabbitMqConfig.REELS_INTERACTION_ROUTING_KEY,
+                event
+        );
+
+        return ResponseEntity.accepted().build(); // 202 Accepted (Non-blocking)
     }
 
     @GetMapping("/{reelId}/comments")

@@ -24,7 +24,20 @@ spring:
         jwt:
           issuer-uri: http://localhost:8080/realms/ecommerce-realm
           jwk-set-uri: http://localhost:8080/realms/ecommerce-realm/protocol/openid-connect/certs
-
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          initial-interval: 1000ms
+          max-attempts: 3
+          multiplier: 2.0
 # --- MinIO Object Storage Entegrasyonu ---
 minio:
   url: http://localhost:9000

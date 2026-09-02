@@ -36,6 +36,15 @@ spring:
           max-active: 8
           max-idle: 8
           min-idle: 2
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        acknowledge-mode: auto
+        default-requeue-rejected: false
 # --- Keycloak Admin REST API Konfigürasyonu ---
 app:
   cache:

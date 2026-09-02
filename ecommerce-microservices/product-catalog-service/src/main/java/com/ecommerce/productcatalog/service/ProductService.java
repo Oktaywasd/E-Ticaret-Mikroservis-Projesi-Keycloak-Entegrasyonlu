@@ -1,5 +1,7 @@
 package com.ecommerce.productcatalog.service;
 
+import com.ecommerce.productcatalog.config.RabbitMqConfig;
+import com.ecommerce.productcatalog.dto.event.CacheInvalidationEvent;
 import com.ecommerce.productcatalog.dto.request.ProductCreateRequest;
 import com.ecommerce.productcatalog.dto.request.ProductFilterRequest;
 import com.ecommerce.productcatalog.dto.request.ProductUpdateRequest;
@@ -15,6 +17,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -44,6 +47,7 @@ public class ProductService {
     private final MongoTemplate mongoTemplate;
     private final CacheService cacheService;
     private final ObjectMapper objectMapper;
+    private final RabbitTemplate rabbitTemplate;
 
     private static final String CACHE_TOP_PRODUCTS = "cache:top_products";
     private static final String CACHE_TOP_50_PRODUCTS = "cache:top_50_products";
@@ -99,9 +103,27 @@ public class ProductService {
     }
 
     public void clearProductCaches() {
+        clearProductCaches("MANUAL_OR_DATA_CHANGE");
+    }
+
+    public void clearProductCaches(String reason) {
+        // 1. Yerel instance Redis önbelleklerini temizle
         cacheService.delete(CACHE_TOP_PRODUCTS);
         cacheService.delete(CACHE_TOP_50_PRODUCTS);
-        log.info("Tüm ürün cache'leri temizlendi.");
+        log.info("Tüm ürün cache'leri temizlendi. (Sebep: {})", reason);
+
+        // 2. Diğer tüm kopyalara Fanout Exchange üzerinden anlık sinyal gönder
+        try {
+            CacheInvalidationEvent event = CacheInvalidationEvent.builder()
+                    .cachePattern("cache:top_*")
+                    .triggeredBy(reason)
+                    .build();
+
+            rabbitTemplate.convertAndSend(RabbitMqConfig.CACHE_FANOUT_EXCHANGE, "", event);
+            log.info("Cache Invalidation Fanout eventi yayınlandı: {}", RabbitMqConfig.CACHE_FANOUT_EXCHANGE);
+        } catch (Exception e) {
+            log.error("Cache Invalidation Fanout mesajı gönderilirken hata oluştu: {}", e.getMessage(), e);
+        }
     }
 
     public Map<String, Object> getCacheStatus() {
@@ -132,7 +154,7 @@ public class ProductService {
         product.setUpdatedDate(LocalDateTime.now());
         productRepository.save(product);
 
-        clearProductCaches();
+        clearProductCaches("PRODUCT_SALES_AND_SCORE_UPDATED");
     }
 
     // ==========================================
@@ -204,7 +226,7 @@ public class ProductService {
         product.setUpdatedDate(LocalDateTime.now());
 
         Product savedProduct = productRepository.save(product);
-        clearProductCaches();
+        clearProductCaches("PRODUCT_CREATED");
         return productMapper.toResponse(savedProduct);
     }
 
@@ -237,7 +259,7 @@ public class ProductService {
         updatedProduct.setUpdatedDate(LocalDateTime.now());
 
         Product savedProduct = productRepository.save(updatedProduct);
-        clearProductCaches();
+        clearProductCaches("PRODUCT_UPDATED");
         return productMapper.toResponse(savedProduct);
     }
 
@@ -279,7 +301,7 @@ public class ProductService {
         product.setUpdatedDate(LocalDateTime.now());
         productRepository.save(product);
 
-        clearProductCaches();
+        clearProductCaches("STOCK_REDUCED");
         log.info("Stock reduced and sales updated. Product: {}, New Stock: {}, Sales: {}, Score: {}",
                 id, newStock, updatedSales, newScore);
     }
@@ -308,7 +330,7 @@ public class ProductService {
         product.setUpdatedDate(LocalDateTime.now());
 
         productRepository.save(product);
-        clearProductCaches();
+        clearProductCaches("STOCK_RESTORED");
         log.info("Stock restored successfully for product {}. Added: {}, New Stock: {}", id, quantity, newStock);
     }
 
@@ -318,7 +340,7 @@ public class ProductService {
         product.setIsDeleted(true);
         product.setUpdatedDate(LocalDateTime.now());
         productRepository.save(product);
-        clearProductCaches();
+        clearProductCaches("PRODUCT_DELETED");
     }
 
     public ProductResponse addImagesToProduct(String productId, List<MultipartFile> files) {
@@ -336,7 +358,7 @@ public class ProductService {
         }
 
         Product updatedProduct = productRepository.save(product);
-        clearProductCaches();
+        clearProductCaches("PRODUCT_IMAGES_ADDED");
         return productMapper.toResponse(updatedProduct);
     }
 
@@ -374,7 +396,7 @@ public class ProductService {
         product.setUpdatedDate(LocalDateTime.now());
 
         Product savedProduct = productRepository.save(product);
-        clearProductCaches();
+        clearProductCaches("PRODUCT_STATUS_TOGGLED");
         log.info("Product ID: {} status toggled. New isActive state: {}", id, product.getIsActive());
         return productMapper.toResponse(savedProduct);
     }

@@ -3,6 +3,8 @@ package com.ecommerce.order.service.impl;
 import com.ecommerce.order.client.CrmClient;
 import com.ecommerce.order.client.ProductCatalogClient;
 import com.ecommerce.order.client.dto.ProductResponseDto;
+import com.ecommerce.order.dto.event.OrderCancelledEvent;
+import com.ecommerce.order.dto.event.OrderCreatedEvent;
 import com.ecommerce.order.dto.request.CreateOrderRequestDto;
 import com.ecommerce.order.dto.request.OrderItemRequestDto;
 import com.ecommerce.order.dto.response.OrderResponseDto;
@@ -16,6 +18,8 @@ import com.ecommerce.order.repository.OrderRepository;
 import com.ecommerce.order.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,10 +34,15 @@ import java.util.List;
 @RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
 
+    private static final String ORDER_EXCHANGE = "order.exchange";
+    private static final String ORDER_CREATED_ROUTING_KEY = "order.created";
+    private static final String ORDER_CANCELLED_ROUTING_KEY = "order.cancelled";
+
     private final OrderRepository orderRepository;
     private final ProductCatalogClient productCatalogClient;
     private final CrmClient crmClient;
     private final OrderMapper orderMapper;
+    private final RabbitTemplate rabbitTemplate;
 
     @Override
     @Transactional
@@ -94,9 +103,23 @@ public class OrderServiceImpl implements OrderService {
 
         Order savedOrder = orderRepository.save(order);
 
-        for (OrderItem item : savedOrder.getItems()) {
-            productCatalogClient.reduceStock(item.getProductId(), item.getQuantity());
-        }
+        // --- RabbitMQ Asenkron Event Fırlatma (Stok Düşürme) ---
+        List<OrderCreatedEvent.OrderItemDto> eventItems = savedOrder.getItems().stream()
+                .map(item -> OrderCreatedEvent.OrderItemDto.builder()
+                        .productId(item.getProductId())
+                        .quantity(item.getQuantity())
+                        .build())
+                .toList();
+
+        OrderCreatedEvent orderCreatedEvent = OrderCreatedEvent.builder()
+                .orderId(savedOrder.getId())
+                .userId(keycloakUserId)
+                .items(eventItems)
+                .createdAt(savedOrder.getCreatedAt())
+                .build();
+
+        rabbitTemplate.convertAndSend(ORDER_EXCHANGE, ORDER_CREATED_ROUTING_KEY, orderCreatedEvent);
+        log.info("OrderCreatedEvent successfully published to RabbitMQ for order ID: {}", savedOrder.getId());
 
         log.info("Order created successfully with ID: {} and Code: {}", savedOrder.getId(), uniqueOrderCode);
         return orderMapper.toOrderResponseDto(savedOrder);
@@ -154,7 +177,7 @@ public class OrderServiceImpl implements OrderService {
         Order order = findOrderEntityById(orderId);
 
         if (!isAdmin && !order.getKeycloakUserId().equals(keycloakUserId)) {
-            throw new BusinessException("You are not authorized to cancel this order.");
+            throw new AccessDeniedException("You are not authorized to cancel this order.");
         }
 
         if (order.getStatus() == OrderStatus.DELIVERED) {
@@ -169,19 +192,33 @@ public class OrderServiceImpl implements OrderService {
         order.setUpdatedAt(LocalDateTime.now());
         Order cancelledOrder = orderRepository.save(order);
 
-        if (cancelledOrder.getItems() != null) {
-            for (OrderItem item : cancelledOrder.getItems()) {
-                try {
-                    productCatalogClient.restoreStock(item.getProductId(), item.getQuantity());
-                    log.info("Stock restored for product: {} with quantity: {}", item.getProductId(), item.getQuantity());
-                } catch (Exception e) {
-                    log.error("Failed to restore stock for product ID: {} in order: {}", item.getProductId(), orderId, e);
-                }
-            }
+        // --- RabbitMQ Asenkron Event Fırlatma (Stok İadesi / Compensating Event) ---
+        if (cancelledOrder.getItems() != null && !cancelledOrder.getItems().isEmpty()) {
+            List<OrderCancelledEvent.CancelledOrderItemDto> eventItems = cancelledOrder.getItems().stream()
+                    .map(item -> OrderCancelledEvent.CancelledOrderItemDto.builder()
+                            .productId(item.getProductId())
+                            .quantity(item.getQuantity())
+                            .build())
+                    .toList();
+
+            OrderCancelledEvent orderCancelledEvent = OrderCancelledEvent.builder()
+                    .orderId(cancelledOrder.getId())
+                    .keycloakUserId(cancelledOrder.getKeycloakUserId())
+                    .items(eventItems)
+                    .build();
+
+            rabbitTemplate.convertAndSend(ORDER_EXCHANGE, ORDER_CANCELLED_ROUTING_KEY, orderCancelledEvent);
+            log.info("OrderCancelledEvent published to RabbitMQ for order ID: {}", orderId);
         }
 
         log.info("Order cancelled successfully with ID: {}", orderId);
         return orderMapper.toOrderResponseDto(cancelledOrder);
+    }
+
+    @Override
+    @Transactional
+    public void cancelOrder(String orderId, String keycloakUserId) {
+        cancelOrder(orderId, keycloakUserId, false);
     }
 
     @Override

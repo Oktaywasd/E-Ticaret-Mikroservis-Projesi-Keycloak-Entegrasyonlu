@@ -21,4 +21,6 @@ public interface OrderService {
     OrderResponseDto cancelOrder(String orderId, String keycloakUserId, boolean isAdmin);
 
     Boolean verifyUserPurchasedProduct(String userId, String productId);
+
+    void cancelOrder(String orderId, String keycloakUserId);
 }

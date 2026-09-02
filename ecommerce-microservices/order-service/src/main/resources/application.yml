@@ -14,6 +14,11 @@ spring:
         jwt:
           issuer-uri: http://localhost:8080/realms/ecommerce-realm
           jwk-set-uri: http://localhost:8080/realms/ecommerce-realm/protocol/openid-connect/certs
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
 
 application:
   config:
